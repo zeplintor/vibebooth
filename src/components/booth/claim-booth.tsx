@@ -5,7 +5,7 @@ interface ClaimBoothProps {
   readonly total?: number
 }
 
-export function ClaimBooth({ claimed, total = 4 }: ClaimBoothProps) {
+export function ClaimBooth({ claimed, total = 3 }: ClaimBoothProps) {
   return (
     <div className="flex flex-col items-center gap-1">
       <h3 className="font-[family-name:var(--font-hand)] text-lg text-gray-600 font-bold leading-tight text-center">

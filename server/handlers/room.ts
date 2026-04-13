@@ -87,15 +87,9 @@ export function registerRoomHandlers(io: IO, socket: IOSocket): void {
     const room = getRoom(roomId)
     if (!room) return
 
-    // Only the host can start
-    if (room.hostId !== socket.id) {
-      socket.emit('error', 'Only the host can start the countdown')
-      return
-    }
-
-    // All participants must have their camera ready
+    // Any participant with camera ready can start
     const allReady = room.participants.every((p) => p.status === 'camera_ready')
-    if (!allReady || room.participants.length < MAX_PARTICIPANTS) {
+    if (!allReady || room.participants.length === 0) {
       socket.emit('error', 'Not all participants are ready')
       return
     }

@@ -6,7 +6,7 @@ export interface Participant {
   readonly id: string
   readonly peerId: string
   readonly name: string
-  readonly slotIndex: number // 0-3
+  readonly slotIndex: number // 0-2
   readonly status: ParticipantStatus
   readonly isHost: boolean
 }
@@ -89,13 +89,12 @@ export interface ClientToServerEvents {
 
 // ─── Booth Slots ─────────────────────────────────────────────────────
 
-export const MAX_PARTICIPANTS = 4
+export const MAX_PARTICIPANTS = 3
 
 export const SLOT_COLORS = [
   '#FF6B9D', // pink
   '#C084FC', // purple
   '#4ADE80', // green
-  '#FBBF24', // yellow
 ] as const
 
 export type SlotColor = (typeof SLOT_COLORS)[number]

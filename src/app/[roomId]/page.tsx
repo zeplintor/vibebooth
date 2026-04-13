@@ -112,10 +112,10 @@ export default function RoomPage({ params }: RoomPageProps) {
     setLocalPhase('lobby')
   }
 
-  // Host starts countdown via socket (or local if solo)
+  // Start countdown — always use server when connected
   function handleSnap() {
     setLocalPhase('countdown')
-    if (connected && participants.length > 1) {
+    if (connected) {
       startCountdown()
     }
   }
@@ -130,10 +130,38 @@ export default function RoomPage({ params }: RoomPageProps) {
     <video ref={videoRef} autoPlay playsInline muted className="w-full h-full object-cover scale-x-[-1]" />
   )
 
-  const frames: [React.ReactNode, React.ReactNode, React.ReactNode] = isActive
-    ? [videoElement, <LiveMirror key="1" stream={stream} />, <LiveMirror key="2" stream={stream} />]
-    : [<PlaceholderScene key="0" />, <PlaceholderScene key="1" />, <PlaceholderScene key="2" />]
+  // Build frames based on participants: my slot = live camera, other slots = participant name or mirror/placeholder
+  const mySlot = myParticipant?.slotIndex ?? 0
+  const otherParticipants = participants.filter((p) => p.id !== myParticipant?.id)
 
+  function buildFrames(): [React.ReactNode, React.ReactNode, React.ReactNode] {
+    if (!isActive) {
+      return [<PlaceholderScene key="0" />, <PlaceholderScene key="1" />, <PlaceholderScene key="2" />]
+    }
+
+    const slots: React.ReactNode[] = [null, null, null]
+
+    // My slot gets the live camera
+    slots[mySlot] = videoElement
+
+    // Fill other slots
+    for (let i = 0; i < 3; i++) {
+      if (slots[i] !== null) continue
+      const remote = otherParticipants.find((p) => p.slotIndex === i)
+      if (remote) {
+        slots[i] = <RemoteSlot key={i} name={remote.name} ready={remote.status === 'camera_ready'} />
+      } else if (participants.length === 1) {
+        // Solo mode: mirror in empty slots
+        slots[i] = <LiveMirror key={i} stream={stream} />
+      } else {
+        slots[i] = <PlaceholderScene key={i} />
+      }
+    }
+
+    return slots as [React.ReactNode, React.ReactNode, React.ReactNode]
+  }
+
+  const frames = buildFrames()
   const claimedCount = Math.max(isActive ? 1 : 0, participants.length)
 
   // ─── Result ────────────────────────────────────────────────
@@ -247,6 +275,20 @@ export default function RoomPage({ params }: RoomPageProps) {
       )}
 
       <DrawingModal open={drawingOpen} onClose={() => setDrawingOpen(false)} onSave={(url) => setBackgroundUrl(url)} roomId={roomId} userName={userName} />
+    </div>
+  )
+}
+
+function RemoteSlot({ name, ready }: { name: string; ready: boolean }) {
+  return (
+    <div className="w-full h-full flex flex-col items-center justify-center bg-gradient-to-br from-purple-50 to-pink-50">
+      <div className={`w-10 h-10 rounded-full flex items-center justify-center text-lg font-bold text-white ${ready ? 'bg-emerald-400' : 'bg-gray-300'}`}>
+        {name.charAt(0).toUpperCase()}
+      </div>
+      <span className="mt-1 text-xs font-[family-name:var(--font-hand)] text-gray-500">{name}</span>
+      <span className={`text-[10px] ${ready ? 'text-emerald-500' : 'text-gray-400'}`}>
+        {ready ? 'ready' : 'joining...'}
+      </span>
     </div>
   )
 }
