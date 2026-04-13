@@ -28,9 +28,11 @@ export default function RoomPage({ params }: RoomPageProps) {
   const [capturedPhotos, setCapturedPhotos] = useState<[string, string, string] | null>(null)
   const [captureIndex, setCaptureIndex] = useState(0)
   const photosBuffer = useRef<string[]>([])
+  const hasJoined = useRef(false)
 
   const { videoRef, stream, isActive, error, start, stop } = useCamera()
   const {
+    socketId,
     connected,
     participants,
     myParticipant,
@@ -41,9 +43,10 @@ export default function RoomPage({ params }: RoomPageProps) {
     captureTriggered,
   } = useRoom(roomId)
 
-  // Join booth = request camera + join socket room
+  // Join booth = request camera + join socket room (once)
   async function handleClaim() {
-    if (isActive) return
+    if (isActive || hasJoined.current) return
+    hasJoined.current = true
     await start()
     join(userName)
   }
@@ -130,35 +133,31 @@ export default function RoomPage({ params }: RoomPageProps) {
     <video ref={videoRef} autoPlay playsInline muted className="w-full h-full object-cover scale-x-[-1]" />
   )
 
-  // Build frames based on participants: my slot = live camera, other slots = participant name or mirror/placeholder
-  const mySlot = myParticipant?.slotIndex ?? 0
-  const otherParticipants = participants.filter((p) => p.id !== myParticipant?.id)
+  // Build frames: slot 0 = always my camera, other slots = remote participants or mirrors
+  const remoteParticipants = participants.filter((p) => p.id !== (myParticipant?.id ?? socketId))
 
   function buildFrames(): [React.ReactNode, React.ReactNode, React.ReactNode] {
     if (!isActive) {
       return [<PlaceholderScene key="0" />, <PlaceholderScene key="1" />, <PlaceholderScene key="2" />]
     }
 
-    const slots: React.ReactNode[] = [null, null, null]
+    // Slot 0 = always my live camera
+    const slot0 = videoElement
 
-    // My slot gets the live camera
-    slots[mySlot] = videoElement
+    // Slots 1 & 2: remote participants, mirrors (solo), or placeholders
+    const slot1 = remoteParticipants[0]
+      ? <RemoteSlot key="1" name={remoteParticipants[0].name} ready={remoteParticipants[0].status === 'camera_ready'} />
+      : remoteParticipants.length === 0 && participants.length <= 1
+        ? <LiveMirror key="1" stream={stream} />
+        : <PlaceholderScene key="1" />
 
-    // Fill other slots
-    for (let i = 0; i < 3; i++) {
-      if (slots[i] !== null) continue
-      const remote = otherParticipants.find((p) => p.slotIndex === i)
-      if (remote) {
-        slots[i] = <RemoteSlot key={i} name={remote.name} ready={remote.status === 'camera_ready'} />
-      } else if (participants.length === 1) {
-        // Solo mode: mirror in empty slots
-        slots[i] = <LiveMirror key={i} stream={stream} />
-      } else {
-        slots[i] = <PlaceholderScene key={i} />
-      }
-    }
+    const slot2 = remoteParticipants[1]
+      ? <RemoteSlot key="2" name={remoteParticipants[1].name} ready={remoteParticipants[1].status === 'camera_ready'} />
+      : remoteParticipants.length === 0 && participants.length <= 1
+        ? <LiveMirror key="2" stream={stream} />
+        : <PlaceholderScene key="2" />
 
-    return slots as [React.ReactNode, React.ReactNode, React.ReactNode]
+    return [slot0, slot1, slot2]
   }
 
   const frames = buildFrames()
