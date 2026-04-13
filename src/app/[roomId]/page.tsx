@@ -157,44 +157,28 @@ export default function RoomPage({ params }: RoomPageProps) {
 
   const remoteParticipants = participants.filter((p) => p.id !== (myParticipant?.id ?? socketId))
 
-  function buildFrames(): [React.ReactNode, React.ReactNode, React.ReactNode] {
-    if (!isActive) {
-      return [<PlaceholderScene key="0" />, <PlaceholderScene key="1" />, <PlaceholderScene key="2" />]
-    }
-
-    // Slot 0 = my camera (always)
-    const slot0 = videoElement
-
-    // Slot 1 & 2: remote camera stream, or mirror if solo
-    const slot1 = buildRemoteSlot(0, '1')
-    const slot2 = buildRemoteSlot(1, '2')
-
-    return [slot0, slot1, slot2]
-  }
-
-  function buildRemoteSlot(remoteIndex: number, key: string): React.ReactNode {
+  // Simple frame logic:
+  // - Not active → 3 placeholders
+  // - Solo (0 remotes) → my camera + 2 mirrors of my stream
+  // - 1 remote → my camera + remote stream (or waiting) + mirror
+  // - 2 remotes → my camera + remote1 + remote2
+  function getSlotContent(remoteIndex: number): React.ReactNode {
     const remote = remoteParticipants[remoteIndex]
-
-    if (!remote) {
-      // No remote participant for this slot
-      if (remoteParticipants.length === 0) {
-        // Solo mode: mirror my camera
-        return <LiveMirror key={key} stream={stream} />
+    if (remote) {
+      const peerStream = remoteStreams.find((s) => s.participantId === remote.id)
+      if (peerStream) {
+        return <LiveMirror key={`remote-${remoteIndex}`} stream={peerStream.stream} />
       }
-      return <PlaceholderScene key={key} />
+      return <RemoteSlot key={`wait-${remoteIndex}`} name={remote.name} ready={remote.status === 'camera_ready'} />
     }
-
-    // Check if we have a PeerJS stream for this participant
-    const peerStream = remoteStreams.find((s) => s.participantId === remote.id)
-    if (peerStream) {
-      return <LiveMirror key={key} stream={peerStream.stream} />
-    }
-
-    // Waiting for peer connection
-    return <RemoteSlot key={key} name={remote.name} ready={remote.status === 'camera_ready'} />
+    // No remote for this slot → mirror my camera
+    return <LiveMirror key={`mirror-${remoteIndex}`} stream={stream} />
   }
 
-  const frames = buildFrames()
+  const frames: [React.ReactNode, React.ReactNode, React.ReactNode] = isActive
+    ? [videoElement, getSlotContent(0), getSlotContent(1)]
+    : [<PlaceholderScene key="0" />, <PlaceholderScene key="1" />, <PlaceholderScene key="2" />]
+
   const claimedCount = Math.max(isActive ? 1 : 0, participants.length)
 
   // ─── Result ────────────────────────────────────────────────
