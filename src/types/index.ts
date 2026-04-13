@@ -62,6 +62,7 @@ export interface ServerToClientEvents {
   'room:participant-joined': (participant: Participant) => void
   'room:participant-left': (participantId: string) => void
   'room:participant-ready': (participantId: string) => void
+  'peer:announce': (data: { participantId: string; peerId: string }) => void
   'countdown:tick': (secondsLeft: number) => void
   'countdown:capture': () => void
   'phase:change': (phase: RoomPhase) => void
@@ -79,6 +80,7 @@ export interface ClientToServerEvents {
   'room:leave': (roomId: string) => void
   'room:camera-ready': (roomId: string) => void
   'countdown:start': (roomId: string) => void
+  'peer:announce': (data: { roomId: string; peerId: string }) => void
   // Collab draw
   'draw:stroke': (data: { roomId: string } & DrawStroke) => void
   'draw:sticker': (data: { roomId: string } & DrawSticker) => void

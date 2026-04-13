@@ -11,6 +11,7 @@ import CountdownOverlay from '@/components/booth/countdown-overlay'
 import ResultView from '@/components/booth/result-view'
 import { useCamera } from '@/hooks/use-camera'
 import { useRoom } from '@/hooks/use-room'
+import { usePeerStreams } from '@/hooks/use-peer-streams'
 
 type LocalPhase = 'lobby' | 'countdown' | 'capturing' | 'result'
 
@@ -39,9 +40,30 @@ export default function RoomPage({ params }: RoomPageProps) {
     join,
     setReady,
     startCountdown,
+    announcePeer,
+    peerAnnouncements,
     countdownValue,
     captureTriggered,
   } = useRoom(roomId)
+
+  // PeerJS for exchanging camera streams
+  const { peerId, remoteStreams, connectToPeer } = usePeerStreams(stream)
+
+  // Announce our PeerJS ID to the room when it's ready
+  useEffect(() => {
+    if (peerId && connected && myParticipant) {
+      announcePeer(peerId)
+    }
+  }, [peerId, connected, myParticipant, announcePeer])
+
+  // Connect to remote peers when they announce themselves
+  useEffect(() => {
+    for (const announcement of peerAnnouncements) {
+      if (announcement.participantId !== socketId) {
+        connectToPeer(announcement.peerId, announcement.participantId)
+      }
+    }
+  }, [peerAnnouncements, socketId, connectToPeer])
 
   // Join booth = request camera + join socket room (once)
   async function handleClaim() {
@@ -67,7 +89,6 @@ export default function RoomPage({ params }: RoomPageProps) {
     }
   }, [captureTriggered, localPhase])
 
-  // Show countdown from server
   const showCountdown = countdownValue !== null && countdownValue > 0 && localPhase === 'countdown'
 
   const captureFrame = useCallback((): string | null => {
@@ -84,7 +105,7 @@ export default function RoomPage({ params }: RoomPageProps) {
     return canvas.toDataURL('image/png')
   }, [])
 
-  // Sequential capture
+  // Sequential capture (3 photos)
   useEffect(() => {
     if (localPhase !== 'capturing') return
     if (photosBuffer.current.length >= 3) {
@@ -112,10 +133,10 @@ export default function RoomPage({ params }: RoomPageProps) {
     setCapturedPhotos(null)
     photosBuffer.current = []
     setCaptureIndex(0)
+    hasJoined.current = false
     setLocalPhase('lobby')
   }
 
-  // Start countdown — always use server when connected
   function handleSnap() {
     setLocalPhase('countdown')
     if (connected) {
@@ -129,11 +150,11 @@ export default function RoomPage({ params }: RoomPageProps) {
     setCaptureIndex(0)
   }, [])
 
+  // ─── Build frames ──────────────────────────────────────────
   const videoElement = (
     <video ref={videoRef} autoPlay playsInline muted className="w-full h-full object-cover scale-x-[-1]" />
   )
 
-  // Build frames: slot 0 = always my camera, other slots = remote participants or mirrors
   const remoteParticipants = participants.filter((p) => p.id !== (myParticipant?.id ?? socketId))
 
   function buildFrames(): [React.ReactNode, React.ReactNode, React.ReactNode] {
@@ -141,23 +162,36 @@ export default function RoomPage({ params }: RoomPageProps) {
       return [<PlaceholderScene key="0" />, <PlaceholderScene key="1" />, <PlaceholderScene key="2" />]
     }
 
-    // Slot 0 = always my live camera
+    // Slot 0 = my camera (always)
     const slot0 = videoElement
 
-    // Slots 1 & 2: remote participants, mirrors (solo), or placeholders
-    const slot1 = remoteParticipants[0]
-      ? <RemoteSlot key="1" name={remoteParticipants[0].name} ready={remoteParticipants[0].status === 'camera_ready'} />
-      : remoteParticipants.length === 0 && participants.length <= 1
-        ? <LiveMirror key="1" stream={stream} />
-        : <PlaceholderScene key="1" />
-
-    const slot2 = remoteParticipants[1]
-      ? <RemoteSlot key="2" name={remoteParticipants[1].name} ready={remoteParticipants[1].status === 'camera_ready'} />
-      : remoteParticipants.length === 0 && participants.length <= 1
-        ? <LiveMirror key="2" stream={stream} />
-        : <PlaceholderScene key="2" />
+    // Slot 1 & 2: remote camera stream, or mirror if solo
+    const slot1 = buildRemoteSlot(0, '1')
+    const slot2 = buildRemoteSlot(1, '2')
 
     return [slot0, slot1, slot2]
+  }
+
+  function buildRemoteSlot(remoteIndex: number, key: string): React.ReactNode {
+    const remote = remoteParticipants[remoteIndex]
+
+    if (!remote) {
+      // No remote participant for this slot
+      if (remoteParticipants.length === 0) {
+        // Solo mode: mirror my camera
+        return <LiveMirror key={key} stream={stream} />
+      }
+      return <PlaceholderScene key={key} />
+    }
+
+    // Check if we have a PeerJS stream for this participant
+    const peerStream = remoteStreams.find((s) => s.participantId === remote.id)
+    if (peerStream) {
+      return <LiveMirror key={key} stream={peerStream.stream} />
+    }
+
+    // Waiting for peer connection
+    return <RemoteSlot key={key} name={remote.name} ready={remote.status === 'camera_ready'} />
   }
 
   const frames = buildFrames()
@@ -229,7 +263,7 @@ export default function RoomPage({ params }: RoomPageProps) {
                   className="text-xs font-[family-name:var(--font-hand)] text-gray-500 flex items-center gap-1"
                 >
                   <span className={`w-2 h-2 rounded-full ${p.status === 'camera_ready' ? 'bg-emerald-400' : 'bg-gray-300'}`} />
-                  {p.name}
+                  {p.name} {p.id === (myParticipant?.id ?? socketId) ? '(you)' : ''}
                 </span>
               ))}
             </div>
@@ -261,7 +295,7 @@ export default function RoomPage({ params }: RoomPageProps) {
         </div>
       )}
 
-      {/* Countdown: local (solo) or show server value */}
+      {/* Countdown */}
       {localPhase === 'countdown' && !showCountdown && (
         <CountdownOverlay onComplete={handleCountdownComplete} />
       )}
@@ -286,7 +320,7 @@ function RemoteSlot({ name, ready }: { name: string; ready: boolean }) {
       </div>
       <span className="mt-1 text-xs font-[family-name:var(--font-hand)] text-gray-500">{name}</span>
       <span className={`text-[10px] ${ready ? 'text-emerald-500' : 'text-gray-400'}`}>
-        {ready ? 'ready' : 'joining...'}
+        {ready ? 'connecting camera...' : 'joining...'}
       </span>
     </div>
   )

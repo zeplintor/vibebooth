@@ -12,6 +12,11 @@ import type {
 
 type TypedSocket = Socket<ServerToClientEvents, ClientToServerEvents>
 
+interface PeerAnnounce {
+  readonly participantId: string
+  readonly peerId: string
+}
+
 interface UseRoomResult {
   readonly socketId: string | null
   readonly connected: boolean
@@ -22,6 +27,8 @@ interface UseRoomResult {
   readonly join: (name: string) => void
   readonly setReady: () => void
   readonly startCountdown: () => void
+  readonly announcePeer: (peerId: string) => void
+  readonly peerAnnouncements: readonly PeerAnnounce[]
   readonly countdownValue: number | null
   readonly captureTriggered: boolean
 }
@@ -33,6 +40,7 @@ export function useRoom(roomId: string): UseRoomResult {
   const [room, setRoom] = useState<Room | null>(null)
   const [countdownValue, setCountdownValue] = useState<number | null>(null)
   const [captureTriggered, setCaptureTriggered] = useState(false)
+  const [peerAnnouncements, setPeerAnnouncements] = useState<readonly PeerAnnounce[]>([])
 
   useEffect(() => {
     const socket: TypedSocket = io({
@@ -68,8 +76,14 @@ export function useRoom(roomId: string): UseRoomResult {
       setRoom((prev) => prev ? { ...prev, phase: newPhase } : prev)
     })
 
+    socket.on('peer:announce', (data) => {
+      setPeerAnnouncements((prev) => {
+        const filtered = prev.filter((p) => p.participantId !== data.participantId)
+        return [...filtered, data]
+      })
+    })
+
     socket.on('error', (msg) => {
-      // Could show toast here, for now just log
       console.warn('[VibeBooth socket error]', msg)
     })
 
@@ -97,6 +111,12 @@ export function useRoom(roomId: string): UseRoomResult {
     socket.emit('countdown:start', roomId)
   }, [roomId])
 
+  const announcePeer = useCallback((peerId: string) => {
+    const socket = socketRef.current
+    if (!socket) return
+    socket.emit('peer:announce', { roomId, peerId })
+  }, [roomId])
+
   const participants = room?.participants ?? []
   const myParticipant = participants.find((p) => p.id === socketId) ?? null
   const phase = room?.phase ?? 'lobby'
@@ -111,6 +131,8 @@ export function useRoom(roomId: string): UseRoomResult {
     join,
     setReady,
     startCountdown,
+    announcePeer,
+    peerAnnouncements,
     countdownValue,
     captureTriggered,
   }

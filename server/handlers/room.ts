@@ -114,6 +114,11 @@ export function registerRoomHandlers(io: IO, socket: IOSocket): void {
     }, 1000)
   })
 
+  // Relay PeerJS ID to other participants
+  socket.on('peer:announce', ({ roomId, peerId }) => {
+    socket.to(roomId).emit('peer:announce', { participantId: socket.id, peerId })
+  })
+
   socket.on('room:leave', (roomId) => {
     handleLeave(io, socket, roomId)
     currentRoomId = null
