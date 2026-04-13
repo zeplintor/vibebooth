@@ -1,0 +1,12 @@
+services:
+  - type: web
+    name: vibebooth
+    runtime: node
+    repo: https://github.com/zeplintor/vibebooth
+    branch: main
+    buildCommand: npm install && npm run build
+    startCommand: npm start
+    plan: free
+    envVars:
+      - key: NODE_ENV
+        value: production
