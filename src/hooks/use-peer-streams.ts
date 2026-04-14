@@ -75,6 +75,7 @@ export function usePeerStreams(localStream: MediaStream | null, myParticipantId:
       port: peerPort,
       path: peerPath,
       secure: peerSecure,
+      key: process.env.NEXT_PUBLIC_PEERJS_KEY ?? 'peerjs',
       config: { iceServers },
     })
 
