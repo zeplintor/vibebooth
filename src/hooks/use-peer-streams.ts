@@ -52,11 +52,28 @@ export function usePeerStreams(localStream: MediaStream | null): UsePeerStreamsR
     const peerPath = process.env.NEXT_PUBLIC_PEERJS_PATH ?? '/'
     const peerSecure = (process.env.NEXT_PUBLIC_PEERJS_SECURE ?? 'true') === 'true'
 
+    // ICE servers: STUN for direct connections + TURN for NAT traversal
+    // Without TURN, WebRTC fails between different networks (mobile, different ISPs)
+    const turnHost = process.env.NEXT_PUBLIC_TURN_HOST
+    const iceServers: RTCIceServer[] = [
+      { urls: 'stun:stun.l.google.com:19302' },
+      { urls: 'stun:stun1.l.google.com:19302' },
+    ]
+    if (turnHost) {
+      const turnUser = process.env.NEXT_PUBLIC_TURN_USER ?? 'vibebooth'
+      const turnPass = process.env.NEXT_PUBLIC_TURN_PASS ?? 'vibebooth2024'
+      iceServers.push(
+        { urls: `turn:${turnHost}:3478`, username: turnUser, credential: turnPass },
+        { urls: `turns:${turnHost}:5349`, username: turnUser, credential: turnPass },
+      )
+    }
+
     const peer = new Peer({
       host: peerHost,
       port: peerPort,
       path: peerPath,
       secure: peerSecure,
+      config: { iceServers },
     })
 
     peerRef.current = peer
