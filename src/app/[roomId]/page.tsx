@@ -221,7 +221,10 @@ export default function RoomPage({ params }: RoomPageProps) {
   function getSlotContent(remoteIndex: number): React.ReactNode {
     const remote = remoteParticipants[remoteIndex]
     if (remote) {
-      const peerStream = remoteStreams.find((s) => s.participantId === remote.id)
+      // Match stream by participantId (socketId in metadata) OR by peerId stored in participant
+      const peerStream = remoteStreams.find(
+        (s) => s.participantId === remote.id || (remote.peerId && s.peerId === remote.peerId)
+      )
       if (peerStream) {
         return <LiveMirror key={`remote-${remoteIndex}`} stream={peerStream.stream} />
       }
@@ -293,7 +296,7 @@ export default function RoomPage({ params }: RoomPageProps) {
             <div>socket: {socketId?.slice(0, 8) ?? 'null'} {connected ? '✅' : '❌'}</div>
             <div>peerId: {peerId?.slice(0, 8) ?? 'null'}</div>
             <div>participants: {participants.length} ({participants.map(p => `${p.name}[${p.peerId?.slice(0,4) ?? 'no-peer'}]`).join(', ')})</div>
-            <div>remoteStreams: {remoteStreams.length} ({remoteStreams.map(s => `${s.participantId.slice(0,8)}`).join(', ')})</div>
+            <div>remoteStreams: {remoteStreams.length} ({remoteStreams.map(s => `pid:${s.participantId.slice(0,6)} ppid:${s.peerId.slice(0,6)}`).join(' | ')})</div>
             <div>announcements: {peerAnnouncements.length}</div>
             {peerError && <div className="text-red-400">peerErr: {peerError}</div>}
           </div>

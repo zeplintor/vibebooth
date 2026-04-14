@@ -12,6 +12,7 @@ interface PeerStream {
 interface UsePeerStreamsResult {
   readonly peerId: string | null
   readonly peerError: string | null
+  // streams keyed by the remote PeerJS peer ID (not socket ID)
   readonly remoteStreams: readonly PeerStream[]
   readonly connectToPeer: (remotePeerId: string, remoteParticipantId: string) => void
 }
@@ -28,11 +29,13 @@ export function usePeerStreams(localStream: MediaStream | null, myParticipantId:
   const connectionsRef = useRef<Map<string, MediaConnection>>(new Map())
 
   // Handle incoming stream from a call
+  // Store by peerId (PeerJS ID) — participantId (socketId) comes from metadata
   const handleIncomingStream = useCallback((call: MediaConnection, stream: MediaStream) => {
+    // metadata.participantId is the CALLER's socket ID (set by caller via myParticipantId)
     const participantId = call.metadata?.participantId ?? call.peer
+    console.log('[PeerJS] incoming stream from peerId=', call.peer, 'participantId=', participantId)
 
     setRemoteStreams((prev) => {
-      // Replace existing stream for this peer or add new
       const filtered = prev.filter((s) => s.peerId !== call.peer)
       return [...filtered, { peerId: call.peer, participantId, stream }]
     })
