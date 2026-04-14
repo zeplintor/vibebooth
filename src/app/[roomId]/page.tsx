@@ -51,7 +51,8 @@ export default function RoomPage({ params }: RoomPageProps) {
   } = useRoom(roomId)
 
   // PeerJS for exchanging camera streams
-  const { peerId, remoteStreams, connectToPeer } = usePeerStreams(stream)
+  // Pass socketId so metadata correctly identifies us as the caller
+  const { peerId, remoteStreams, connectToPeer } = usePeerStreams(stream, socketId)
 
   // Announce our PeerJS ID to the room when it's ready
   // Use socketId instead of myParticipant to avoid race: myParticipant may be null
@@ -283,6 +284,20 @@ export default function RoomPage({ params }: RoomPageProps) {
   return (
     <div className="flex flex-col items-center w-full h-full min-h-0">
       <LeopardPatternDefs />
+
+      {/* Temporary debug panel — remove after fixing streams */}
+      {process.env.NODE_ENV !== 'production' || true ? (
+        <details className="fixed bottom-2 right-2 z-50 bg-black/80 text-white text-[10px] font-mono p-2 rounded max-w-xs">
+          <summary className="cursor-pointer">🔧 debug</summary>
+          <div className="mt-1 space-y-0.5">
+            <div>socket: {socketId?.slice(0, 8) ?? 'null'} {connected ? '✅' : '❌'}</div>
+            <div>peerId: {peerId?.slice(0, 8) ?? 'null'}</div>
+            <div>participants: {participants.length} ({participants.map(p => `${p.name}[${p.peerId?.slice(0,4) ?? 'no-peer'}]`).join(', ')})</div>
+            <div>remoteStreams: {remoteStreams.length} ({remoteStreams.map(s => `${s.participantId.slice(0,8)}`).join(', ')})</div>
+            <div>announcements: {peerAnnouncements.length}</div>
+          </div>
+        </details>
+      ) : null}
 
       {/* Fix 4: room code + copy link button */}
       <div className="flex items-center gap-3 mb-2 shrink-0">

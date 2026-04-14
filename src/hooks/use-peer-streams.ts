@@ -19,7 +19,7 @@ interface UsePeerStreamsResult {
  * Manages PeerJS connections for exchanging camera streams.
  * Each participant creates a Peer, shares their stream, and receives remote streams.
  */
-export function usePeerStreams(localStream: MediaStream | null): UsePeerStreamsResult {
+export function usePeerStreams(localStream: MediaStream | null, myParticipantId: string | null = null): UsePeerStreamsResult {
   const [peerId, setPeerId] = useState<string | null>(null)
   const [remoteStreams, setRemoteStreams] = useState<readonly PeerStream[]>([])
   const peerRef = useRef<Peer | null>(null)
@@ -119,8 +119,9 @@ export function usePeerStreams(localStream: MediaStream | null): UsePeerStreamsR
       connectionsRef.current.delete(remotePeerId)
     }
 
+    // Pass OUR own participantId in metadata so the receiver knows who is calling
     const call = peer.call(remotePeerId, localStream, {
-      metadata: { participantId: remoteParticipantId },
+      metadata: { participantId: myParticipantId ?? remoteParticipantId },
     })
 
     connectionsRef.current.set(remotePeerId, call)
