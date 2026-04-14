@@ -54,22 +54,37 @@ export default function RoomPage({ params }: RoomPageProps) {
   const { peerId, remoteStreams, connectToPeer } = usePeerStreams(stream)
 
   // Announce our PeerJS ID to the room when it's ready
+  // Use socketId instead of myParticipant to avoid race: myParticipant may be null
+  // if room:state hasn't arrived yet when peerId becomes available
+  const hasAnnouncedPeer = useRef(false)
   useEffect(() => {
-    if (peerId && connected && myParticipant) {
+    if (peerId && connected && socketId && !hasAnnouncedPeer.current) {
+      hasAnnouncedPeer.current = true
       announcePeer(peerId)
     }
-  }, [peerId, connected, myParticipant, announcePeer])
+  }, [peerId, connected, socketId, announcePeer])
 
-  // Connect to remote peers — re-runs when peerId becomes available (our PeerJS ready)
-  // so announcements received before PeerJS was open are retried
+  // Connect to remote peers via two sources:
+  // 1. peerAnnouncements (from socket events / room:state injection)
+  // 2. participants list — if a participant already has a peerId stored server-side,
+  //    connect directly without waiting for a peer:announce event
   useEffect(() => {
     if (!peerId) return // wait until our own PeerJS is open before trying to call anyone
+
+    // Source 1: peer announcements (live events + late-joiner injection)
     for (const announcement of peerAnnouncements) {
       if (announcement.participantId !== socketId) {
         connectToPeer(announcement.peerId, announcement.participantId)
       }
     }
-  }, [peerAnnouncements, socketId, connectToPeer, peerId])
+
+    // Source 2: participants with stored peerIds (handles case where we missed the announce event)
+    for (const p of participants) {
+      if (p.id !== socketId && p.peerId) {
+        connectToPeer(p.peerId, p.id)
+      }
+    }
+  }, [peerAnnouncements, participants, socketId, connectToPeer, peerId])
 
   // Fix 2: submit name form
   function handleNameSubmit(e: React.FormEvent) {
