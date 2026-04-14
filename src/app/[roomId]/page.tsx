@@ -52,7 +52,7 @@ export default function RoomPage({ params }: RoomPageProps) {
 
   // PeerJS for exchanging camera streams
   // Pass socketId so metadata correctly identifies us as the caller
-  const { peerId, remoteStreams, connectToPeer } = usePeerStreams(stream, socketId)
+  const { peerId, peerError, remoteStreams, connectToPeer } = usePeerStreams(stream, socketId)
 
   // Announce our PeerJS ID to the room when it's ready
   // Use socketId instead of myParticipant to avoid race: myParticipant may be null
@@ -295,6 +295,7 @@ export default function RoomPage({ params }: RoomPageProps) {
             <div>participants: {participants.length} ({participants.map(p => `${p.name}[${p.peerId?.slice(0,4) ?? 'no-peer'}]`).join(', ')})</div>
             <div>remoteStreams: {remoteStreams.length} ({remoteStreams.map(s => `${s.participantId.slice(0,8)}`).join(', ')})</div>
             <div>announcements: {peerAnnouncements.length}</div>
+            {peerError && <div className="text-red-400">peerErr: {peerError}</div>}
           </div>
         </details>
       ) : null}

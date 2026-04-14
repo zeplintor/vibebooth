@@ -11,6 +11,7 @@ interface PeerStream {
 
 interface UsePeerStreamsResult {
   readonly peerId: string | null
+  readonly peerError: string | null
   readonly remoteStreams: readonly PeerStream[]
   readonly connectToPeer: (remotePeerId: string, remoteParticipantId: string) => void
 }
@@ -21,6 +22,7 @@ interface UsePeerStreamsResult {
  */
 export function usePeerStreams(localStream: MediaStream | null, myParticipantId: string | null = null): UsePeerStreamsResult {
   const [peerId, setPeerId] = useState<string | null>(null)
+  const [peerError, setPeerError] = useState<string | null>(null)
   const [remoteStreams, setRemoteStreams] = useState<readonly PeerStream[]>([])
   const peerRef = useRef<Peer | null>(null)
   const connectionsRef = useRef<Map<string, MediaConnection>>(new Map())
@@ -79,6 +81,7 @@ export function usePeerStreams(localStream: MediaStream | null, myParticipantId:
     peerRef.current = peer
 
     peer.on('open', (id) => {
+      console.log('[PeerJS] open, id=', id)
       setPeerId(id)
     })
 
@@ -92,7 +95,14 @@ export function usePeerStreams(localStream: MediaStream | null, myParticipantId:
 
     peer.on('error', (err) => {
       console.warn('[PeerJS error]', err.type, err.message)
+      setPeerError(`${err.type}: ${err.message}`)
     })
+
+    peer.on('disconnected', () => {
+      console.warn('[PeerJS] disconnected from server')
+    })
+
+    console.log('[PeerJS] connecting to', peerHost, peerPort, peerPath, 'secure=', peerSecure)
 
     return () => {
       connectionsRef.current.forEach((conn) => conn.close())
@@ -141,5 +151,5 @@ export function usePeerStreams(localStream: MediaStream | null, myParticipantId:
     })
   }, [localStream, handleIncomingStream])
 
-  return { peerId, remoteStreams, connectToPeer }
+  return { peerId, peerError, remoteStreams, connectToPeer }
 }
