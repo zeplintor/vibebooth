@@ -45,11 +45,18 @@ export function usePeerStreams(localStream: MediaStream | null): UsePeerStreamsR
   useEffect(() => {
     if (!localStream) return
 
+    // Use our own PeerJS server (self-hosted on the VPS) for reliability
+    // Falls back to peerjs.com if env var not set (local dev)
+    const peerHost = process.env.NEXT_PUBLIC_PEERJS_HOST ?? '0.peerjs.com'
+    const peerPort = parseInt(process.env.NEXT_PUBLIC_PEERJS_PORT ?? '443')
+    const peerPath = process.env.NEXT_PUBLIC_PEERJS_PATH ?? '/'
+    const peerSecure = (process.env.NEXT_PUBLIC_PEERJS_SECURE ?? 'true') === 'true'
+
     const peer = new Peer({
-      host: '0.peerjs.com',
-      port: 443,
-      path: '/',
-      secure: true,
+      host: peerHost,
+      port: peerPort,
+      path: peerPath,
+      secure: peerSecure,
     })
 
     peerRef.current = peer
@@ -83,8 +90,17 @@ export function usePeerStreams(localStream: MediaStream | null): UsePeerStreamsR
   // Call a remote peer to exchange streams
   const connectToPeer = useCallback((remotePeerId: string, remoteParticipantId: string) => {
     const peer = peerRef.current
-    if (!peer || !localStream) return
-    if (connectionsRef.current.has(remotePeerId)) return // already connected
+    // Guard: skip if our PeerJS isn't ready yet or stream not available
+    if (!peer || peer.destroyed || !localStream) return
+    // Skip only if already have an active connection (not just a failed attempt)
+    const existing = connectionsRef.current.get(remotePeerId)
+    if (existing && existing.open) return
+
+    // Remove stale/closed connection before retrying
+    if (existing) {
+      existing.close()
+      connectionsRef.current.delete(remotePeerId)
+    }
 
     const call = peer.call(remotePeerId, localStream, {
       metadata: { participantId: remoteParticipantId },

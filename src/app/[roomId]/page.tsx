@@ -60,14 +60,16 @@ export default function RoomPage({ params }: RoomPageProps) {
     }
   }, [peerId, connected, myParticipant, announcePeer])
 
-  // Connect to remote peers when they announce themselves
+  // Connect to remote peers — re-runs when peerId becomes available (our PeerJS ready)
+  // so announcements received before PeerJS was open are retried
   useEffect(() => {
+    if (!peerId) return // wait until our own PeerJS is open before trying to call anyone
     for (const announcement of peerAnnouncements) {
       if (announcement.participantId !== socketId) {
         connectToPeer(announcement.peerId, announcement.participantId)
       }
     }
-  }, [peerAnnouncements, socketId, connectToPeer])
+  }, [peerAnnouncements, socketId, connectToPeer, peerId])
 
   // Fix 2: submit name form
   function handleNameSubmit(e: React.FormEvent) {
