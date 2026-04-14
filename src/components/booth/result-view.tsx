@@ -187,37 +187,18 @@ export function ResultView({ photos, backgroundUrl, onRetake, roomId }: ResultVi
           </svg>
         </a>
 
-        {/* Instagram (story hint — just downloads) */}
+        {/* Save to phone (Insta / TikTok / Snapchat) */}
         <button
           onClick={handleDownload}
-          className="share-btn share-btn-insta"
-          title="Save for Instagram"
+          className="share-btn flex items-center gap-1.5 !px-3 !rounded-full font-[family-name:var(--font-display)] text-xs font-semibold bg-gray-100 text-gray-600 hover:bg-gray-200"
+          title="Save photo to share on Insta, TikTok or Snapchat"
         >
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <rect x="2" y="2" width="20" height="20" rx="5" ry="5" /><circle cx="12" cy="12" r="5" /><circle cx="17.5" cy="6.5" r="1.5" fill="currentColor" stroke="none" />
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+            <polyline points="7 10 12 15 17 10" />
+            <line x1="12" y1="15" x2="12" y2="3" />
           </svg>
-        </button>
-
-        {/* TikTok (save for upload) */}
-        <button
-          onClick={handleDownload}
-          className="share-btn share-btn-tiktok"
-          title="Save for TikTok"
-        >
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
-            <path d="M19.59 6.69a4.83 4.83 0 01-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 01-2.88 2.5 2.89 2.89 0 01-2.89-2.89 2.89 2.89 0 012.89-2.89c.28 0 .54.04.79.1v-3.51a6.37 6.37 0 00-.79-.05A6.34 6.34 0 003.15 15.2a6.34 6.34 0 0010.86 4.46V13a8.28 8.28 0 005.58 2.17v-3.45a4.85 4.85 0 01-2.65-.78 4.83 4.83 0 01-1.35-4.25z" />
-          </svg>
-        </button>
-
-        {/* Snapchat */}
-        <button
-          onClick={handleDownload}
-          className="share-btn share-btn-snap"
-          title="Save for Snapchat"
-        >
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-            <path d="M12.206.793c.99 0 4.347.276 5.93 3.821.529 1.193.403 3.219.299 4.847l-.003.06c-.012.18-.022.345-.03.51.075.045.203.09.401.09.3-.016.659-.12.897-.223.052-.023.104-.035.158-.035.396 0 .735.317.735.712 0 .278-.148.473-.36.56-.531.217-1.148.33-1.654.42-.13.023-.234.045-.312.064l-.039.009c-.128.035-.192.085-.192.159 0 .04.012.085.037.128.32.557.788 1.058 1.391 1.49.207.148.38.267.508.349.378.241.465.391.465.6 0 .273-.248.503-.736.684-.484.18-1.134.26-1.413.295l-.052.007c-.064.009-.115.044-.128.092-.04.137-.1.256-.18.364-.201.271-.536.392-.871.392-.198 0-.395-.042-.571-.113-.379-.153-.793-.228-1.208-.228-.385 0-.772.067-1.159.214-.242.094-.477.138-.69.138-.315 0-.628-.105-.853-.37a1.182 1.182 0 01-.195-.388c-.014-.048-.064-.083-.128-.092l-.052-.007c-.28-.036-.929-.115-1.413-.295-.488-.18-.736-.41-.736-.684 0-.209.087-.36.465-.6a5.7 5.7 0 00.508-.349 5.697 5.697 0 001.39-1.49.212.212 0 00.038-.127c0-.074-.064-.124-.192-.16l-.039-.008a5.896 5.896 0 01-.312-.064c-.506-.09-1.123-.203-1.654-.42-.212-.087-.36-.282-.36-.56 0-.395.339-.712.735-.712.054 0 .106.012.157.035.238.103.598.207.898.223.198 0 .326-.045.4-.09a8.167 8.167 0 01-.032-.57c-.104-1.628-.23-3.654.3-4.847C7.86 1.069 11.216.793 12.206.793z" />
-          </svg>
+          Save for Insta / TikTok
         </button>
 
         {/* Copy link */}

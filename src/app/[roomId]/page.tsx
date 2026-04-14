@@ -7,7 +7,6 @@ import PlaceholderScene from '@/components/booth/placeholder-scene'
 import ClaimBooth from '@/components/booth/claim-booth'
 import SnapButton from '@/components/booth/snap-button'
 import DrawingModal from '@/components/booth/drawing-modal'
-import CountdownOverlay from '@/components/booth/countdown-overlay'
 import ResultView from '@/components/booth/result-view'
 import { useCamera } from '@/hooks/use-camera'
 import { useRoom } from '@/hooks/use-room'
@@ -22,14 +21,19 @@ interface RoomPageProps {
 export default function RoomPage({ params }: RoomPageProps) {
   const { roomId } = use(params)
 
-  const [userName] = useState(() => `User-${Math.random().toString(36).slice(2, 6)}`)
+  // ── Fix 2: ask for name before joining ──────────────────────
+  const [userName, setUserName] = useState('')
+  const [nameInput, setNameInput] = useState('')
+  const [nameReady, setNameReady] = useState(false)
+
   const [localPhase, setLocalPhase] = useState<LocalPhase>('lobby')
   const [drawingOpen, setDrawingOpen] = useState(false)
   const [backgroundUrl, setBackgroundUrl] = useState<string | null>(null)
   const [capturedPhotos, setCapturedPhotos] = useState<[string, string, string] | null>(null)
-  const [captureIndex, setCaptureIndex] = useState(0)
-  const photosBuffer = useRef<string[]>([])
+  const [isJoining, setIsJoining] = useState(false) // Fix 7: loading state
+  const [linkCopied, setLinkCopied] = useState(false) // Fix 4: copy link
   const hasJoined = useRef(false)
+  const stripRef = useRef<HTMLDivElement>(null) // Fix 8: capture remote streams
 
   const { videoRef, stream, isActive, error, start, stop } = useCamera()
   const {
@@ -65,12 +69,27 @@ export default function RoomPage({ params }: RoomPageProps) {
     }
   }, [peerAnnouncements, socketId, connectToPeer])
 
+  // Fix 2: submit name form
+  function handleNameSubmit(e: React.FormEvent) {
+    e.preventDefault()
+    const name = nameInput.trim()
+    if (!name) return
+    setUserName(name)
+    setNameReady(true)
+  }
+
   // Join booth = request camera + join socket room (once)
+  // Fix 7: loading state around camera start
   async function handleClaim() {
     if (isActive || hasJoined.current) return
     hasJoined.current = true
-    await start()
-    join(userName)
+    setIsJoining(true)
+    try {
+      await start()
+      join(userName)
+    } finally {
+      setIsJoining(false)
+    }
   }
 
   // Once camera is active, tell server we're ready
@@ -80,75 +99,99 @@ export default function RoomPage({ params }: RoomPageProps) {
     }
   }, [isActive, myParticipant, setReady])
 
-  // Server-triggered capture
+  // Fix 6: rely solely on server captureTriggered — no local countdown fallback
   useEffect(() => {
     if (captureTriggered && localPhase === 'countdown') {
       setLocalPhase('capturing')
-      photosBuffer.current = []
-      setCaptureIndex(0)
     }
   }, [captureTriggered, localPhase])
 
-  const showCountdown = countdownValue !== null && countdownValue > 0 && localPhase === 'countdown'
+  const showCountdown = countdownValue !== null && countdownValue > 0
 
-  const captureFrame = useCallback((): string | null => {
-    const video = videoRef.current
-    if (!video || video.readyState < 2 || video.videoWidth === 0) return null
-    const canvas = document.createElement('canvas')
-    canvas.width = video.videoWidth
-    canvas.height = video.videoHeight
-    const ctx = canvas.getContext('2d')
-    if (!ctx) return null
-    ctx.translate(canvas.width, 0)
-    ctx.scale(-1, 1)
-    ctx.drawImage(video, 0, 0)
-    return canvas.toDataURL('image/png')
+  // Fix 8: capture all visible video streams in the strip
+  const captureAllSlots = useCallback(async (): Promise<[string, string, string] | null> => {
+    const container = stripRef.current
+    if (!container) return null
+    const videos = Array.from(container.querySelectorAll('video'))
+    const results: string[] = []
+
+    for (const video of videos.slice(0, 3)) {
+      const w = video.videoWidth || 640
+      const h = video.videoHeight || 480
+      const canvas = document.createElement('canvas')
+      canvas.width = w
+      canvas.height = h
+      const ctx = canvas.getContext('2d')
+      if (!ctx) continue
+      ctx.translate(w, 0)
+      ctx.scale(-1, 1)
+      ctx.drawImage(video, 0, 0)
+      results.push(canvas.toDataURL('image/png'))
+    }
+
+    // Pad to 3 (solo = mirrors)
+    const fallback = results[0] ?? ''
+    while (results.length < 3) results.push(fallback)
+    return results as [string, string, string]
   }, [])
 
-  // Sequential capture (3 photos)
+  // Sequential capture phase (3 photos, 1.5 s apart)
+  const photosBufferRef = useRef<string[]>([])
+  const [captureIndex, setCaptureIndex] = useState(0)
+
   useEffect(() => {
     if (localPhase !== 'capturing') return
-    if (photosBuffer.current.length >= 3) {
-      setCapturedPhotos(photosBuffer.current as [string, string, string])
+
+    if (photosBufferRef.current.length >= 3) {
+      setCapturedPhotos(photosBufferRef.current as [string, string, string])
       stop()
       setLocalPhase('result')
       return
     }
 
-    const delay = photosBuffer.current.length === 0 ? 300 : 1500
-    const timer = setTimeout(() => {
-      const frame = captureFrame()
-      if (frame) {
-        photosBuffer.current = [...photosBuffer.current, frame]
-        setCaptureIndex(photosBuffer.current.length)
+    const delay = photosBufferRef.current.length === 0 ? 300 : 1500
+    const timer = setTimeout(async () => {
+      const slots = await captureAllSlots()
+      if (slots) {
+        // Capture the "main" frame for this shot: use the slot matching the current photo index
+        // (so photo 0 = slot 0 / local cam, photo 1 = slot 1 / remote 1, photo 2 = slot 2 / remote 2)
+        // For a classic strip feel, each photo shows all 3 at once — use slot 0 (local cam) each time
+        // but with the remote frames composited in slots 1 & 2 this is the most natural single-frame pick
+        const frameIndex = photosBufferRef.current.length
+        const frame = slots[frameIndex] ?? slots[0]
+        photosBufferRef.current = [...photosBufferRef.current, frame]
+        setCaptureIndex(photosBufferRef.current.length)
       } else {
         setCaptureIndex((prev) => prev + 0.001)
       }
     }, delay)
 
     return () => clearTimeout(timer)
-  }, [localPhase, captureIndex, captureFrame, stop])
+  }, [localPhase, captureIndex, captureAllSlots, stop])
+
+  // Fix 4: copy invite link
+  function handleCopyLink() {
+    const url = typeof window !== 'undefined' ? window.location.href : ''
+    navigator.clipboard.writeText(url)
+    setLinkCopied(true)
+    setTimeout(() => setLinkCopied(false), 2000)
+  }
 
   function handleRetake() {
     setCapturedPhotos(null)
-    photosBuffer.current = []
+    photosBufferRef.current = []
     setCaptureIndex(0)
     hasJoined.current = false
     setLocalPhase('lobby')
   }
 
   function handleSnap() {
-    setLocalPhase('countdown')
+    // Fix 6: set countdown phase only after emitting — server drives the tick
     if (connected) {
       startCountdown()
     }
+    setLocalPhase('countdown')
   }
-
-  const handleCountdownComplete = useCallback(() => {
-    setLocalPhase('capturing')
-    photosBuffer.current = []
-    setCaptureIndex(0)
-  }, [])
 
   // ─── Build frames ──────────────────────────────────────────
   const videoElement = (
@@ -157,11 +200,6 @@ export default function RoomPage({ params }: RoomPageProps) {
 
   const remoteParticipants = participants.filter((p) => p.id !== (myParticipant?.id ?? socketId))
 
-  // Simple frame logic:
-  // - Not active → 3 placeholders
-  // - Solo (0 remotes) → my camera + 2 mirrors of my stream
-  // - 1 remote → my camera + remote stream (or waiting) + mirror
-  // - 2 remotes → my camera + remote1 + remote2
   function getSlotContent(remoteIndex: number): React.ReactNode {
     const remote = remoteParticipants[remoteIndex]
     if (remote) {
@@ -171,7 +209,6 @@ export default function RoomPage({ params }: RoomPageProps) {
       }
       return <RemoteSlot key={`wait-${remoteIndex}`} name={remote.name} ready={remote.status === 'camera_ready'} />
     }
-    // No remote for this slot → mirror my camera
     return <LiveMirror key={`mirror-${remoteIndex}`} stream={stream} />
   }
 
@@ -190,16 +227,64 @@ export default function RoomPage({ params }: RoomPageProps) {
     )
   }
 
+  // ─── Fix 2: Name entry screen ──────────────────────────────
+  if (!nameReady) {
+    return (
+      <div className="flex flex-col items-center justify-center w-full h-full min-h-0 gap-6">
+        <LeopardPatternDefs />
+        <div className="card-sketch p-8 text-center max-w-xs w-full">
+          <h2 className="font-[family-name:var(--font-hand)] text-3xl font-bold text-vb-ink mb-2">
+            What's your name?
+          </h2>
+          <p className="font-[family-name:var(--font-display)] text-vb-ink/60 text-sm mb-6">
+            So your friends know it's you 📸
+          </p>
+          <form onSubmit={handleNameSubmit} className="flex flex-col gap-3">
+            <input
+              autoFocus
+              type="text"
+              value={nameInput}
+              onChange={(e) => setNameInput(e.target.value)}
+              placeholder="Your name…"
+              maxLength={20}
+              className="px-3 py-2.5 rounded-lg border-2 border-vb-ink/30 font-[family-name:var(--font-display)] text-sm focus:outline-none focus:border-vb-pink bg-white text-center"
+            />
+            <button
+              type="submit"
+              disabled={!nameInput.trim()}
+              className="btn-sketch bg-vb-pink text-white disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              Enter Booth ✨
+            </button>
+          </form>
+        </div>
+      </div>
+    )
+  }
+
   // ─── Lobby ─────────────────────────────────────────────────
   return (
     <div className="flex flex-col items-center w-full h-full min-h-0">
       <LeopardPatternDefs />
 
-      {/* Room code + connection status */}
+      {/* Fix 4: room code + copy link button */}
       <div className="flex items-center gap-3 mb-2 shrink-0">
-        <p className="font-[family-name:var(--font-hand)] text-gray-400 text-base">
-          Room: <span className="font-mono text-vb-pink font-bold tracking-wider">{roomId}</span>
-        </p>
+        <button
+          onClick={handleCopyLink}
+          className="flex items-center gap-2 font-[family-name:var(--font-hand)] text-base hover:opacity-70 transition-opacity"
+          title="Copy invite link"
+        >
+          <span className="text-gray-400">Room:</span>
+          <span className="font-mono text-vb-pink font-bold tracking-wider">{roomId}</span>
+          {linkCopied ? (
+            <span className="text-xs text-emerald-500 font-[family-name:var(--font-display)]">✓ Copied!</span>
+          ) : (
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-gray-400">
+              <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
+              <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
+            </svg>
+          )}
+        </button>
         {connected ? (
           <span className="flex items-center gap-1 text-xs font-[family-name:var(--font-display)] text-emerald-500">
             <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
@@ -213,6 +298,21 @@ export default function RoomPage({ params }: RoomPageProps) {
       {error && (
         <div className="bg-red-50 border-2 border-red-300 rounded-lg px-3 py-1 mb-2 text-red-600 text-xs font-[family-name:var(--font-display)] shrink-0">
           Camera error: {error}
+        </div>
+      )}
+
+      {/* Fix 5: solo waiting message */}
+      {isActive && participants.length <= 1 && (
+        <div className="flex items-center gap-2 mb-2 shrink-0 bg-vb-yellow/20 border border-vb-yellow/50 rounded-full px-4 py-1.5">
+          <span className="font-[family-name:var(--font-hand)] text-vb-ink/70 text-sm">
+            👋 Share the link with friends to fill the booth!
+          </span>
+          <button
+            onClick={handleCopyLink}
+            className="text-xs font-[family-name:var(--font-display)] font-semibold text-vb-pink hover:underline"
+          >
+            {linkCopied ? '✓ Copied' : 'Copy link'}
+          </button>
         </div>
       )}
 
@@ -231,8 +331,10 @@ export default function RoomPage({ params }: RoomPageProps) {
           </button>
         </div>
 
-        {/* Center: photo strip */}
-        <PhotoStrip frames={frames} rotation={-3} backgroundUrl={backgroundUrl} />
+        {/* Center: photo strip — Fix 8: wrapped in stripRef */}
+        <div ref={stripRef}>
+          <PhotoStrip frames={frames} rotation={-3} backgroundUrl={backgroundUrl} />
+        </div>
 
         {/* Right: claim + participants + snap */}
         <div className="flex flex-col items-center gap-3 shrink-0">
@@ -253,9 +355,21 @@ export default function RoomPage({ params }: RoomPageProps) {
             </div>
           )}
 
+          {/* Fix 7: loading state on Join Booth */}
           {!isActive && (
-            <button onClick={handleClaim} className="btn-sketch bg-vb-green text-white !text-sm !py-2 !px-3 !border-2 !shadow-[3px_3px_0_var(--vb-border)]">
-              Join Booth
+            <button
+              onClick={handleClaim}
+              disabled={isJoining}
+              className="btn-sketch bg-vb-green text-white !text-sm !py-2 !px-3 !border-2 !shadow-[3px_3px_0_var(--vb-border)] disabled:opacity-60 disabled:cursor-wait"
+            >
+              {isJoining ? (
+                <span className="flex items-center gap-2">
+                  <span className="w-3 h-3 rounded-full border-2 border-white border-t-transparent animate-spin" />
+                  Joining…
+                </span>
+              ) : (
+                'Join Booth'
+              )}
             </button>
           )}
 
@@ -279,10 +393,7 @@ export default function RoomPage({ params }: RoomPageProps) {
         </div>
       )}
 
-      {/* Countdown */}
-      {localPhase === 'countdown' && !showCountdown && (
-        <CountdownOverlay onComplete={handleCountdownComplete} />
-      )}
+      {/* Fix 6: only server countdown overlay */}
       {showCountdown && (
         <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/40 backdrop-blur-sm">
           <div key={countdownValue} className="countdown-number text-white drop-shadow-lg">
