@@ -49,6 +49,20 @@ export function removeParticipant(roomId: string, participantId: string): Room |
   return updated
 }
 
+export function setParticipantPeerId(roomId: string, participantId: string, peerId: string): Room | undefined {
+  const room = rooms.get(roomId)
+  if (!room) return undefined
+
+  const updated: Room = {
+    ...room,
+    participants: room.participants.map((p) =>
+      p.id === participantId ? { ...p, peerId } : p
+    ),
+  }
+  rooms.set(roomId, updated)
+  return updated
+}
+
 export function setParticipantReady(roomId: string, participantId: string): Room | undefined {
   const room = rooms.get(roomId)
   if (!room) return undefined

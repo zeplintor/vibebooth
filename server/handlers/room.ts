@@ -11,6 +11,7 @@ import {
   addParticipant,
   removeParticipant,
   setParticipantReady,
+  setParticipantPeerId,
   setRoomPhase,
 } from '../state'
 
@@ -114,8 +115,11 @@ export function registerRoomHandlers(io: IO, socket: IOSocket): void {
     }, 1000)
   })
 
-  // Relay PeerJS ID to other participants
+  // Store peerId in room state + relay to current participants
   socket.on('peer:announce', ({ roomId, peerId }) => {
+    // Persist in state so late joiners can discover it
+    setParticipantPeerId(roomId, socket.id, peerId)
+    // Broadcast to everyone else already in the room
     socket.to(roomId).emit('peer:announce', { participantId: socket.id, peerId })
   })
 

@@ -62,6 +62,23 @@ export function useRoom(roomId: string): UseRoomResult {
 
     socket.on('room:state', (updatedRoom) => {
       setRoom(updatedRoom)
+      // When we receive room state, inject peer IDs of existing participants
+      // so late joiners can connect to peers who announced before they arrived
+      const existingPeers = updatedRoom.participants.filter(
+        (p) => p.peerId && p.id !== socket.id
+      )
+      if (existingPeers.length > 0) {
+        setPeerAnnouncements((prev) => {
+          const updated = [...prev]
+          for (const p of existingPeers) {
+            const alreadyKnown = updated.some((a) => a.participantId === p.id)
+            if (!alreadyKnown) {
+              updated.push({ participantId: p.id, peerId: p.peerId })
+            }
+          }
+          return updated
+        })
+      }
     })
 
     socket.on('countdown:tick', (seconds) => {
