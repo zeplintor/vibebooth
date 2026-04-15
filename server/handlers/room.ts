@@ -35,6 +35,7 @@ export function registerRoomHandlers(io: IO, socket: IOSocket): void {
   let currentParticipantId: string | null = null
 
   socket.on('room:join', ({ roomId, name, peerId }) => {
+    console.log(`[room:join] socket=${socket.id} name=${name} room=${roomId}`)
     let room = getRoom(roomId)
 
     // Create room if it doesn't exist — first joiner becomes host

@@ -110,6 +110,14 @@ export default function RoomPage({ params }: RoomPageProps) {
     }
   }
 
+  // Re-join if camera is active but we're not in the participants list
+  // (handles socket reconnects, server restarts, and iOS race conditions)
+  useEffect(() => {
+    if (isActive && connected && userName && participants.length === 0) {
+      join(userName)
+    }
+  }, [isActive, connected, userName, participants.length, join])
+
   // Once camera is active, tell server we're ready
   useEffect(() => {
     if (isActive && myParticipant && myParticipant.status === 'waiting') {
