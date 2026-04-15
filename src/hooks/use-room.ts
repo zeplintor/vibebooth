@@ -41,6 +41,8 @@ export function useRoom(roomId: string): UseRoomResult {
   const [countdownValue, setCountdownValue] = useState<number | null>(null)
   const [captureTriggered, setCaptureTriggered] = useState(false)
   const [peerAnnouncements, setPeerAnnouncements] = useState<readonly PeerAnnounce[]>([])
+  // Pending join: if join() is called before socket connects, retry on connect
+  const pendingJoinRef = useRef<string | null>(null)
 
   useEffect(() => {
     const socket: TypedSocket = io({
@@ -53,6 +55,11 @@ export function useRoom(roomId: string): UseRoomResult {
     socket.on('connect', () => {
       setSocketId(socket.id ?? null)
       setConnected(true)
+      // Retry pending join if join() was called before socket was ready
+      if (pendingJoinRef.current !== null) {
+        socket.emit('room:join', { roomId, name: pendingJoinRef.current, peerId: '' })
+        pendingJoinRef.current = null
+      }
     })
 
     socket.on('disconnect', () => {
@@ -113,7 +120,12 @@ export function useRoom(roomId: string): UseRoomResult {
   const join = useCallback((name: string) => {
     const socket = socketRef.current
     if (!socket) return
-    socket.emit('room:join', { roomId, name, peerId: '' })
+    if (socket.connected) {
+      socket.emit('room:join', { roomId, name, peerId: '' })
+    } else {
+      // Socket not yet connected — store name and emit on connect
+      pendingJoinRef.current = name
+    }
   }, [roomId])
 
   const setReady = useCallback(() => {
