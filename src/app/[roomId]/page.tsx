@@ -111,12 +111,18 @@ export default function RoomPage({ params }: RoomPageProps) {
   }
 
   // Re-join if camera is active but we're not in the participants list
-  // (handles socket reconnects, server restarts, and iOS race conditions)
+  // (handles socket reconnects, server restarts, iOS race conditions)
+  // Throttled: at most one re-join attempt per 3 seconds
+  const lastRejoinAtRef = useRef(0)
   useEffect(() => {
-    if (isActive && connected && userName && participants.length === 0) {
-      join(userName)
-    }
-  }, [isActive, connected, userName, participants.length, join])
+    if (!isActive || !connected || !userName) return
+    const amIInRoom = participants.some((p) => p.id === socketId)
+    if (amIInRoom) return
+    const now = Date.now()
+    if (now - lastRejoinAtRef.current < 3000) return
+    lastRejoinAtRef.current = now
+    join(userName, peerId ?? '')
+  }, [isActive, connected, userName, participants, socketId, join, peerId])
 
   // Once camera is active, tell server we're ready
   useEffect(() => {

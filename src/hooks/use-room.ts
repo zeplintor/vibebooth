@@ -24,7 +24,7 @@ interface UseRoomResult {
   readonly participants: readonly Participant[]
   readonly myParticipant: Participant | null
   readonly phase: RoomPhase
-  readonly join: (name: string) => void
+  readonly join: (name: string, peerId?: string) => void
   readonly setReady: () => void
   readonly startCountdown: () => void
   readonly announcePeer: (peerId: string) => void
@@ -49,6 +49,7 @@ export function useRoom(roomId: string): UseRoomResult {
     const socket: TypedSocket = io({
       path: '/api/socketio',
       autoConnect: true,
+      transports: ['websocket', 'polling'],
     }) as TypedSocket
 
     socketRef.current = socket
@@ -70,6 +71,7 @@ export function useRoom(roomId: string): UseRoomResult {
     })
 
     socket.on('room:state', (updatedRoom) => {
+      console.log('[client] room:state received, participants=', updatedRoom.participants.length, updatedRoom.participants.map(p => p.name))
       setRoom(updatedRoom)
       // When we receive room state, inject peer IDs of existing participants
       // so late joiners can connect to peers who announced before they arrived
@@ -119,12 +121,12 @@ export function useRoom(roomId: string): UseRoomResult {
     }
   }, [roomId])
 
-  const join = useCallback((name: string) => {
+  const join = useCallback((name: string, peerId: string = '') => {
     const socket = socketRef.current
     if (!socket) return
     joinedNameRef.current = name
     if (socket.connected) {
-      socket.emit('room:join', { roomId, name, peerId: '' })
+      socket.emit('room:join', { roomId, name, peerId })
     } else {
       pendingJoinRef.current = name
     }

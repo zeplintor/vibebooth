@@ -43,6 +43,17 @@ export function registerRoomHandlers(io: IO, socket: IOSocket): void {
       room = createRoom(roomId, socket.id)
     }
 
+    // Dedup: if this socket is already in the room, just resync state and bail
+    const existing = room.participants.find((p) => p.id === socket.id)
+    if (existing) {
+      console.log(`[room:join] socket=${socket.id} already in room — resending state`)
+      currentRoomId = roomId
+      currentParticipantId = socket.id
+      socket.join(roomId)
+      socket.emit('room:state', room)
+      return
+    }
+
     if (room.participants.length >= MAX_PARTICIPANTS) {
       socket.emit('error', 'Room is full (4/4)')
       return
