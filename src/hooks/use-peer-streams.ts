@@ -29,15 +29,13 @@ export function usePeerStreams(localStream: MediaStream | null, myParticipantId:
   const connectionsRef = useRef<Map<string, MediaConnection>>(new Map())
 
   // Handle incoming stream from a call
-  // Store by peerId (PeerJS ID) — participantId (socketId) comes from metadata
+  // Use call.peer (PeerJS ID) as the key — participantId matching happens in the component
   const handleIncomingStream = useCallback((call: MediaConnection, stream: MediaStream) => {
-    // metadata.participantId is the CALLER's socket ID (set by caller via myParticipantId)
-    const participantId = call.metadata?.participantId ?? call.peer
-    console.log('[PeerJS] incoming stream from peerId=', call.peer, 'participantId=', participantId)
-
+    console.log('[PeerJS] incoming stream from peerId=', call.peer)
     setRemoteStreams((prev) => {
       const filtered = prev.filter((s) => s.peerId !== call.peer)
-      return [...filtered, { peerId: call.peer, participantId, stream }]
+      // Store peerId as both peerId and participantId — component matches by peerId via participants list
+      return [...filtered, { peerId: call.peer, participantId: call.peer, stream }]
     })
 
     call.on('close', () => {

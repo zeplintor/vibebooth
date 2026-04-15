@@ -221,10 +221,8 @@ export default function RoomPage({ params }: RoomPageProps) {
   function getSlotContent(remoteIndex: number): React.ReactNode {
     const remote = remoteParticipants[remoteIndex]
     if (remote) {
-      // Match stream by participantId (socketId in metadata) OR by peerId stored in participant
-      const peerStream = remoteStreams.find(
-        (s) => s.participantId === remote.id || (remote.peerId && s.peerId === remote.peerId)
-      )
+      // Match stream by peerId stored server-side in participant (set via peer:announce)
+      const peerStream = remote.peerId ? remoteStreams.find((s) => s.peerId === remote.peerId) : undefined
       if (peerStream) {
         return <LiveMirror key={`remote-${remoteIndex}`} stream={peerStream.stream} />
       }
