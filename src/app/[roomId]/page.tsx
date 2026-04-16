@@ -493,7 +493,7 @@ export default function RoomPage({ params }: RoomPageProps) {
         </div>
       )}
 
-      <DrawingModal open={drawingOpen} onClose={() => setDrawingOpen(false)} onSave={(url) => setBackgroundUrl(url)} roomId={roomId} userName={userName} />
+      <DrawingModal open={drawingOpen} onClose={() => setDrawingOpen(false)} onSave={(url) => setBackgroundUrl(url)} roomId={roomId} userName={userName} photos={capturedPhotos || undefined} />
     </div>
   )
 }

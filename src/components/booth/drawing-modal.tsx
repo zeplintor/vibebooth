@@ -3,14 +3,6 @@
 import { useRef, useState, useCallback, useEffect } from 'react'
 import { useCollabDraw, type RemoteCursor } from '@/hooks/use-collab-draw'
 
-interface DrawingModalProps {
-  readonly open: boolean
-  readonly onClose: () => void
-  readonly onSave: (dataUrl: string) => void
-  readonly roomId: string
-  readonly userName: string
-}
-
 const COLORS = [
   '#FF6B9D', '#E87AA4', '#C084FC', '#8B5CF6',
   '#4ADE80', '#22C55E', '#FBBF24', '#F97316',
@@ -34,10 +26,20 @@ const STICKERS = [
   '🌙', '🍄', '🧸', '🎀', '💫', '🩷',
 ] as const
 
-const CANVAS_W = 220
-const CANVAS_H = 620
+// 9:16 format for story/vertical display
+const CANVAS_W = 360
+const CANVAS_H = 640
 
-export function DrawingModal({ open, onClose, onSave, roomId, userName }: DrawingModalProps) {
+interface DrawingModalProps {
+  readonly open: boolean
+  readonly onClose: () => void
+  readonly onSave: (dataUrl: string) => void
+  readonly roomId: string
+  readonly userName: string
+  readonly photos?: readonly [string, string, string]
+}
+
+export function DrawingModal({ open, onClose, onSave, roomId, userName, photos }: DrawingModalProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
   const cursorLayerRef = useRef<HTMLDivElement | null>(null)
   const [isDrawing, setIsDrawing] = useState(false)
@@ -65,17 +67,52 @@ export function DrawingModal({ open, onClose, onSave, roomId, userName }: Drawin
     canvasH: CANVAS_H,
   })
 
-  // Init canvas
+  // Init canvas with background and photos
   useEffect(() => {
     if (!open) return
-    const t = setTimeout(() => {
+    const t = setTimeout(async () => {
       const ctx = canvasRef.current?.getContext('2d')
       if (!ctx) return
       ctx.fillStyle = '#F5F0E8'
       ctx.fillRect(0, 0, CANVAS_W, CANVAS_H)
+
+      // Draw photos if provided
+      if (photos && photos.length === 3) {
+        const photoH = 120 // height of each photo
+        const photoW = 120 // width of each photo
+        const startY = 80 // start position for first photo
+        const gap = 20
+
+        try {
+          for (let i = 0; i < 3; i++) {
+            const img = await loadImage(photos[i])
+            const y = startY + i * (photoH + gap)
+            // Center horizontally
+            const x = (CANVAS_W - photoW) / 2
+            ctx.save()
+            ctx.beginPath()
+            ctx.roundRect(x, y, photoW, photoH, 8)
+            ctx.clip()
+            // Cover-fit the image
+            const scale = Math.max(photoW / img.width, photoH / img.height)
+            const sw = img.width * scale
+            const sh = img.height * scale
+            ctx.drawImage(img, x + (photoW - sw) / 2, y + (photoH - sh) / 2, sw, sh)
+            ctx.restore()
+            // Border
+            ctx.strokeStyle = '#8B5E3C'
+            ctx.lineWidth = 2
+            ctx.beginPath()
+            ctx.roundRect(x, y, photoW, photoH, 8)
+            ctx.stroke()
+          }
+        } catch (err) {
+          console.error('Failed to draw photos on canvas:', err)
+        }
+      }
     }, 50)
     return () => clearTimeout(t)
-  }, [open])
+  }, [open, photos])
 
   // Listen for remote pattern fills
   useEffect(() => {
@@ -250,16 +287,16 @@ export function DrawingModal({ open, onClose, onSave, roomId, userName }: Drawin
           </div>
           <button
             onClick={onClose}
-            className="w-7 h-7 flex items-center justify-center rounded-full border-2 border-vb-ink text-vb-ink hover:bg-gray-100 text-sm font-bold"
+            className="w-11 h-11 md:w-7 md:h-7 flex items-center justify-center rounded-full border-2 border-vb-ink text-vb-ink hover:bg-gray-100 text-sm font-bold"
           >
             x
           </button>
         </div>
 
-        {/* Body: canvas left, tools right */}
-        <div className="flex gap-4 flex-1 min-h-0">
+        {/* Body: canvas top on mobile, left on desktop */}
+        <div className="flex flex-col md:flex-row gap-3 md:gap-4 flex-1 min-h-0">
           {/* Canvas with cursor overlay */}
-          <div className="relative shrink-0" style={{ height: '100%', aspectRatio: `${CANVAS_W} / ${CANVAS_H}` }}>
+          <div className="relative shrink-0 md:h-full w-full md:w-auto" style={{ aspectRatio: `${CANVAS_W} / ${CANVAS_H}`, height: 'auto', maxHeight: 'clamp(200px, 40vh, 100%)' }}>
             <div
               className="border-3 border-vb-ink rounded-lg overflow-hidden cursor-crosshair touch-none w-full h-full"
             >
@@ -294,12 +331,12 @@ export function DrawingModal({ open, onClose, onSave, roomId, userName }: Drawin
           </div>
 
           {/* Tools panel */}
-          <div className="flex flex-col gap-2 flex-1 min-w-0 justify-between overflow-y-auto">
+          <div className="flex flex-col gap-3 flex-1 min-w-0 justify-between overflow-y-auto">
             {/* Mode toggle */}
-            <div className="flex gap-1 shrink-0">
+            <div className="flex gap-2 shrink-0">
               <button
                 onClick={() => setMode('draw')}
-                className={`flex-1 py-1.5 rounded-lg text-xs font-semibold font-[family-name:var(--font-display)] border-2 transition-colors ${
+                className={`flex-1 md:py-1.5 py-2 rounded-lg text-xs font-semibold font-[family-name:var(--font-display)] border-2 transition-colors ${
                   mode === 'draw' ? 'bg-vb-ink text-white border-vb-ink' : 'bg-white text-vb-ink border-gray-300'
                 }`}
               >
@@ -307,7 +344,7 @@ export function DrawingModal({ open, onClose, onSave, roomId, userName }: Drawin
               </button>
               <button
                 onClick={() => setMode('sticker')}
-                className={`flex-1 py-1.5 rounded-lg text-xs font-semibold font-[family-name:var(--font-display)] border-2 transition-colors ${
+                className={`flex-1 md:py-1.5 py-2 rounded-lg text-xs font-semibold font-[family-name:var(--font-display)] border-2 transition-colors ${
                   mode === 'sticker' ? 'bg-vb-ink text-white border-vb-ink' : 'bg-white text-vb-ink border-gray-300'
                 }`}
               >
@@ -318,13 +355,13 @@ export function DrawingModal({ open, onClose, onSave, roomId, userName }: Drawin
             {mode === 'draw' ? (
               <>
                 <div>
-                  <p className="font-[family-name:var(--font-hand)] text-sm text-gray-500 mb-0.5">Colors</p>
-                  <div className="flex flex-wrap gap-1.5">
+                  <p className="font-[family-name:var(--font-hand)] text-sm text-gray-500 mb-2">Colors</p>
+                  <div className="flex flex-wrap gap-2">
                     {COLORS.map((c) => (
                       <button
                         key={c}
                         onClick={() => setColor(c)}
-                        className={`w-6 h-6 rounded-full border-2 transition-transform ${
+                        className={`w-10 h-10 md:w-6 md:h-6 rounded-full border-2 transition-transform ${
                           color === c ? 'border-vb-ink scale-110' : 'border-gray-300'
                         }`}
                         style={{ backgroundColor: c }}
@@ -334,29 +371,29 @@ export function DrawingModal({ open, onClose, onSave, roomId, userName }: Drawin
                 </div>
 
                 <div>
-                  <p className="font-[family-name:var(--font-hand)] text-sm text-gray-500 mb-0.5">Brush</p>
-                  <div className="flex gap-2 items-center">
+                  <p className="font-[family-name:var(--font-hand)] text-sm text-gray-500 mb-2">Brush</p>
+                  <div className="flex gap-3 items-center">
                     {BRUSH_SIZES.map((size) => (
                       <button
                         key={size}
                         onClick={() => setBrushSize(size)}
-                        className={`rounded-full bg-vb-ink transition-transform ${
-                          brushSize === size ? 'ring-2 ring-vb-pink ring-offset-1 scale-110' : ''
+                        className={`rounded-full bg-vb-ink transition-transform md:scale-100 scale-110 ${
+                          brushSize === size ? 'ring-2 ring-vb-pink ring-offset-1 scale-125 md:scale-110' : ''
                         }`}
-                        style={{ width: size + 8, height: size + 8 }}
+                        style={{ width: Math.max(size + 8, 40), height: Math.max(size + 8, 40) }}
                       />
                     ))}
                   </div>
                 </div>
 
                 <div>
-                  <p className="font-[family-name:var(--font-hand)] text-sm text-gray-500 mb-0.5">Patterns</p>
-                  <div className="grid grid-cols-2 gap-1">
+                  <p className="font-[family-name:var(--font-hand)] text-sm text-gray-500 mb-2">Patterns</p>
+                  <div className="grid md:grid-cols-2 grid-cols-2 gap-2">
                     {PATTERNS.map((p) => (
                       <button
                         key={p.id}
                         onClick={() => handleFillPattern(p.id)}
-                        className="btn-sketch !py-1 !px-2 !text-xs bg-white text-vb-ink !border-2 !shadow-[2px_2px_0_var(--vb-border)]"
+                        className="btn-sketch md:!py-1 md:!px-2 !py-2 !px-3 !text-xs bg-white text-vb-ink !border-2 !shadow-[2px_2px_0_var(--vb-border)]"
                       >
                         {p.name}
                       </button>
@@ -367,13 +404,13 @@ export function DrawingModal({ open, onClose, onSave, roomId, userName }: Drawin
             ) : (
               <>
                 <div>
-                  <p className="font-[family-name:var(--font-hand)] text-sm text-gray-500 mb-0.5">Tap to place</p>
-                  <div className="flex flex-wrap gap-1">
+                  <p className="font-[family-name:var(--font-hand)] text-sm text-gray-500 mb-2">Tap to place</p>
+                  <div className="grid grid-cols-6 md:grid-cols-4 gap-2">
                     {STICKERS.map((s, i) => (
                       <button
                         key={`${s}-${i}`}
                         onClick={() => setActiveSticker(s)}
-                        className={`w-8 h-8 flex items-center justify-center rounded-lg text-lg transition-transform ${
+                        className={`w-11 h-11 md:w-8 md:h-8 flex items-center justify-center rounded-lg text-xl md:text-lg transition-transform ${
                           activeSticker === s ? 'bg-vb-pink/20 scale-110 ring-2 ring-vb-pink' : 'hover:bg-gray-100'
                         }`}
                       >
@@ -384,13 +421,13 @@ export function DrawingModal({ open, onClose, onSave, roomId, userName }: Drawin
                 </div>
 
                 <div>
-                  <p className="font-[family-name:var(--font-hand)] text-sm text-gray-500 mb-0.5">Size</p>
-                  <div className="flex gap-2 items-center">
+                  <p className="font-[family-name:var(--font-hand)] text-sm text-gray-500 mb-2">Size</p>
+                  <div className="flex gap-3 items-center">
                     {[16, 24, 36, 48].map((sz) => (
                       <button
                         key={sz}
                         onClick={() => setStickerSize(sz)}
-                        className={`w-8 h-8 flex items-center justify-center rounded-lg border-2 text-xs font-[family-name:var(--font-display)] transition-colors ${
+                        className={`w-11 h-11 md:w-8 md:h-8 flex items-center justify-center rounded-lg border-2 text-xs font-[family-name:var(--font-display)] transition-colors ${
                           stickerSize === sz ? 'border-vb-ink bg-vb-ink text-white' : 'border-gray-300 text-gray-500'
                         }`}
                       >
@@ -419,11 +456,11 @@ export function DrawingModal({ open, onClose, onSave, roomId, userName }: Drawin
             )}
 
             {/* Actions */}
-            <div className="flex gap-2 shrink-0">
-              <button onClick={clearCanvas} className="btn-sketch !py-1.5 !px-3 bg-gray-100 text-vb-ink !text-xs !border-2 !shadow-[2px_2px_0_var(--vb-border)] flex-1">
+            <div className="flex gap-3 shrink-0">
+              <button onClick={clearCanvas} className="btn-sketch md:!py-1.5 md:!px-3 !py-2 !px-4 bg-gray-100 text-vb-ink !text-xs !border-2 !shadow-[2px_2px_0_var(--vb-border)] flex-1">
                 Clear
               </button>
-              <button onClick={handleSave} className="btn-sketch !py-1.5 !px-3 bg-vb-pink text-white !text-xs !border-2 !shadow-[2px_2px_0_var(--vb-border)] flex-1">
+              <button onClick={handleSave} className="btn-sketch md:!py-1.5 md:!px-3 !py-2 !px-4 bg-vb-pink text-white !text-xs !border-2 !shadow-[2px_2px_0_var(--vb-border)] flex-1">
                 Save
               </button>
             </div>
@@ -432,6 +469,15 @@ export function DrawingModal({ open, onClose, onSave, roomId, userName }: Drawin
       </div>
     </div>
   )
+}
+
+function loadImage(src: string): Promise<HTMLImageElement> {
+  return new Promise((resolve, reject) => {
+    const img = new Image()
+    img.onload = () => resolve(img)
+    img.onerror = reject
+    img.src = src
+  })
 }
 
 /**
