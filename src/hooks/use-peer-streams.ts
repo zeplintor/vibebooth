@@ -30,14 +30,7 @@ export function usePeerStreams(localStream: MediaStream | null, myParticipantId:
 
   // Handle incoming stream from a call
   // Use call.peer (PeerJS ID) as the key — participantId matching happens in the component
-  // Skip if the stream is from ourselves (avoid echo/duplicate)
   const handleIncomingStream = useCallback((call: MediaConnection, stream: MediaStream) => {
-    // Reject our own stream (in case of echo or loopback)
-    if (call.peer === peerId) {
-      console.log('[PeerJS] ignoring own stream echo from peerId=', call.peer)
-      return
-    }
-
     console.log('[PeerJS] incoming stream from peerId=', call.peer)
     setRemoteStreams((prev) => {
       const filtered = prev.filter((s) => s.peerId !== call.peer)
@@ -49,7 +42,7 @@ export function usePeerStreams(localStream: MediaStream | null, myParticipantId:
       setRemoteStreams((prev) => prev.filter((s) => s.peerId !== call.peer))
       connectionsRef.current.delete(call.peer)
     })
-  }, [peerId])
+  }, [])
 
   // Initialize peer
   useEffect(() => {
