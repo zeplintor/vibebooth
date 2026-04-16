@@ -115,12 +115,13 @@ export function registerRoomHandlers(io: IO, socket: IOSocket): void {
     const room = getRoom(roomId)
     if (!room) return
 
-    // Any participant with camera ready can start
-    const allReady = room.participants.every((p) => p.status === 'camera_ready')
-    if (!allReady || room.participants.length === 0) {
-      socket.emit('error', 'Not all participants are ready')
+    // The initiator must be ready; others can be in any state (they just won't be captured)
+    const me = room.participants.find((p) => p.id === socket.id)
+    if (!me || me.status !== 'camera_ready') {
+      socket.emit('error', 'Your camera is not ready yet')
       return
     }
+    if (room.participants.length === 0) return
 
     setRoomPhase(roomId, 'countdown')
     io.to(roomId).emit('phase:change', 'countdown')
