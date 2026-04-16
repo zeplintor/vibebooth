@@ -58,6 +58,17 @@ export function registerRoomHandlers(io: IO, socket: IOSocket): void {
       return
     }
 
+    // Name-based dedup: if a participant with the same name already exists (from a
+    // previous socket that hasn't disconnected yet), take over their slot instead
+    // of adding a duplicate. This handles React remounts + reconnects cleanly.
+    const sameName = room.participants.find((p) => p.name === name)
+    if (sameName) {
+      console.log(`[room:join] socket=${socket.id} reclaiming slot from old socket=${sameName.id} (name=${name})`)
+      const updated = removeParticipant(roomId, sameName.id)
+      // removeParticipant may return undefined if room is now empty (unlikely but safe)
+      room = updated ?? getRoom(roomId) ?? room
+    }
+
     if (room.participants.length >= MAX_PARTICIPANTS) {
       socket.emit('error', 'Room is full (4/4)')
       return
