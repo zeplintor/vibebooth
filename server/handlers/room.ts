@@ -61,11 +61,15 @@ export function registerRoomHandlers(io: IO, socket: IOSocket): void {
     // Name-based dedup: if a participant with the same name already exists (from a
     // previous socket that hasn't disconnected yet), take over their slot instead
     // of adding a duplicate. This handles React remounts + reconnects cleanly.
+    let reclaimedSlotIndex: number | null = null
+    let reclaimedPeerId: string | null = null
     const sameName = room.participants.find((p) => p.name === name)
     if (sameName) {
-      console.log(`[room:join] socket=${socket.id} reclaiming slot from old socket=${sameName.id} (name=${name})`)
+      console.log(`[room:join] socket=${socket.id} reclaiming slot from old socket=${sameName.id} (name=${name}) peerId=${sameName.peerId || '(empty)'}`)
+      reclaimedSlotIndex = sameName.slotIndex
+      // Preserve the old peerId if the new socket didn't bring one
+      if (!peerId && sameName.peerId) reclaimedPeerId = sameName.peerId
       const updated = removeParticipant(roomId, sameName.id)
-      // removeParticipant may return undefined if room is now empty (unlikely but safe)
       room = updated ?? getRoom(roomId) ?? room
     }
 
@@ -74,7 +78,7 @@ export function registerRoomHandlers(io: IO, socket: IOSocket): void {
       return
     }
 
-    const slotIndex = findNextSlot(room)
+    const slotIndex = reclaimedSlotIndex ?? findNextSlot(room)
     if (slotIndex === -1) {
       socket.emit('error', 'No slot available')
       return
@@ -82,7 +86,7 @@ export function registerRoomHandlers(io: IO, socket: IOSocket): void {
 
     const participant: Participant = {
       id: socket.id,
-      peerId,
+      peerId: peerId || reclaimedPeerId || '',
       name,
       slotIndex,
       status: 'waiting',
@@ -139,6 +143,13 @@ export function registerRoomHandlers(io: IO, socket: IOSocket): void {
         setRoomPhase(roomId, 'capture')
         io.to(roomId).emit('phase:change', 'capture')
         io.to(roomId).emit('countdown:capture')
+        // Auto-return to lobby 5s later so the next snap works
+        setTimeout(() => {
+          if (getRoom(roomId)) {
+            setRoomPhase(roomId, 'lobby')
+            io.to(roomId).emit('phase:change', 'lobby')
+          }
+        }, 5000)
       }
     }, 1000)
   })

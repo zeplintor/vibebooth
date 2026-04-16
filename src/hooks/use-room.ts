@@ -125,6 +125,11 @@ export function useRoom(roomId: string): UseRoomResult {
 
     socket.on('phase:change', (newPhase) => {
       setRoom((prev) => prev ? { ...prev, phase: newPhase } : prev)
+      // Reset captureTriggered when returning to lobby so the next snap works
+      if (newPhase === 'lobby') {
+        setCaptureTriggered(false)
+        setCountdownValue(null)
+      }
     })
 
     socket.on('peer:announce', (data) => {
