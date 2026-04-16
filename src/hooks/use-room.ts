@@ -103,14 +103,13 @@ export function useRoom(roomId: string): UseRoomResult {
       )
       if (existingPeers.length > 0) {
         setPeerAnnouncements((prev) => {
-          const updated = [...prev]
-          for (const p of existingPeers) {
-            const alreadyKnown = updated.some((a) => a.participantId === p.id)
-            if (!alreadyKnown) {
-              updated.push({ participantId: p.id, peerId: p.peerId })
-            }
-          }
-          return updated
+          // Drop any stale announcement for these participants, then re-add with current peerId
+          const participantIds = new Set(existingPeers.map((p) => p.id))
+          const filtered = prev.filter((a) => !participantIds.has(a.participantId))
+          return [
+            ...filtered,
+            ...existingPeers.map((p) => ({ participantId: p.id, peerId: p.peerId })),
+          ]
         })
       }
     })
@@ -134,7 +133,10 @@ export function useRoom(roomId: string): UseRoomResult {
 
     socket.on('peer:announce', (data) => {
       setPeerAnnouncements((prev) => {
-        const filtered = prev.filter((p) => p.participantId !== data.participantId)
+        // Remove any announcement for this participant OR with this peerId (dedup both ways)
+        const filtered = prev.filter(
+          (p) => p.participantId !== data.participantId && p.peerId !== data.peerId
+        )
         return [...filtered, data]
       })
     })
