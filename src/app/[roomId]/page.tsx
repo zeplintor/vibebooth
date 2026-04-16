@@ -54,13 +54,13 @@ export default function RoomPage({ params }: RoomPageProps) {
   // Pass socketId so metadata correctly identifies us as the caller
   const { peerId, peerError, remoteStreams, connectToPeer } = usePeerStreams(stream, socketId)
 
-  // Announce our PeerJS ID to the room when it's ready
-  // Use socketId instead of myParticipant to avoid race: myParticipant may be null
-  // if room:state hasn't arrived yet when peerId becomes available
-  const hasAnnouncedPeer = useRef(false)
+  // Announce our PeerJS ID to the room whenever it changes
+  // (peerId may change if PeerJS reconnects — re-announce each time so the
+  // server has the CURRENT peerId, otherwise peers try to call a dead ID)
+  const lastAnnouncedPeerIdRef = useRef<string | null>(null)
   useEffect(() => {
-    if (peerId && connected && socketId && !hasAnnouncedPeer.current) {
-      hasAnnouncedPeer.current = true
+    if (peerId && connected && socketId && lastAnnouncedPeerIdRef.current !== peerId) {
+      lastAnnouncedPeerIdRef.current = peerId
       announcePeer(peerId)
     }
   }, [peerId, connected, socketId, announcePeer])

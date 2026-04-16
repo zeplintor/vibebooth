@@ -33,6 +33,28 @@ interface UseRoomResult {
   readonly captureTriggered: boolean
 }
 
+// Module-level singleton: one socket per page load, shared across remounts.
+// Without this, React StrictMode / Fast Refresh / parent re-renders can mount
+// the hook twice, opening two sockets that race each other on room:join.
+let sharedSocket: TypedSocket | null = null
+let sharedSocketRoomId: string | null = null
+
+function getOrCreateSocket(roomId: string): TypedSocket {
+  if (sharedSocket && sharedSocketRoomId === roomId) {
+    return sharedSocket
+  }
+  if (sharedSocket) {
+    sharedSocket.disconnect()
+  }
+  sharedSocket = io({
+    path: '/api/socketio',
+    autoConnect: true,
+    transports: ['websocket', 'polling'],
+  }) as TypedSocket
+  sharedSocketRoomId = roomId
+  return sharedSocket
+}
+
 export function useRoom(roomId: string): UseRoomResult {
   const socketRef = useRef<TypedSocket | null>(null)
   const [socketId, setSocketId] = useState<string | null>(null)
@@ -46,13 +68,14 @@ export function useRoom(roomId: string): UseRoomResult {
   const joinedNameRef = useRef<string | null>(null)
 
   useEffect(() => {
-    const socket: TypedSocket = io({
-      path: '/api/socketio',
-      autoConnect: true,
-      transports: ['websocket', 'polling'],
-    }) as TypedSocket
-
+    const socket = getOrCreateSocket(roomId)
     socketRef.current = socket
+
+    // If socket already connected (singleton reuse), sync state immediately
+    if (socket.connected) {
+      setSocketId(socket.id ?? null)
+      setConnected(true)
+    }
 
     socket.on('connect', () => {
       setSocketId(socket.id ?? null)
@@ -116,7 +139,17 @@ export function useRoom(roomId: string): UseRoomResult {
     })
 
     return () => {
-      socket.disconnect()
+      // Detach listeners but keep the socket alive for potential remount.
+      // The socket is only closed when the roomId changes (handled in getOrCreateSocket)
+      // or when the page unloads (browser does it automatically).
+      socket.off('connect')
+      socket.off('disconnect')
+      socket.off('room:state')
+      socket.off('countdown:tick')
+      socket.off('countdown:capture')
+      socket.off('phase:change')
+      socket.off('peer:announce')
+      socket.off('error')
       socketRef.current = null
     }
   }, [roomId])
