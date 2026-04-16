@@ -156,10 +156,14 @@ export function registerRoomHandlers(io: IO, socket: IOSocket): void {
 
   // Store peerId in room state + relay to current participants
   socket.on('peer:announce', ({ roomId, peerId }) => {
+    console.log(`[peer:announce] socket=${socket.id} peerId=${peerId} room=${roomId}`)
     // Persist in state so late joiners can discover it
-    setParticipantPeerId(roomId, socket.id, peerId)
-    // Broadcast to everyone else already in the room
-    socket.to(roomId).emit('peer:announce', { participantId: socket.id, peerId })
+    const updated = setParticipantPeerId(roomId, socket.id, peerId)
+    if (updated) {
+      // Broadcast the FULL room state to everyone (including the announcer)
+      // so they all see the updated peerId in their participants list
+      io.to(roomId).emit('room:state', updated)
+    }
   })
 
   socket.on('room:leave', (roomId) => {
