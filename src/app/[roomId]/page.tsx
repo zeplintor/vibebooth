@@ -63,27 +63,20 @@ export default function RoomPage({ params }: RoomPageProps) {
   // server has the CURRENT peerId, otherwise peers try to call a dead ID)
   const lastAnnouncedPeerIdRef = useRef<string | null>(null)
 
-  // Watch when peerId becomes available and announce it
-  useEffect(() => {
-    if (!peerId) {
-      console.log(`[announce] waiting for peerId...`)
-      return
-    }
-    console.log(`[announce] peerId ready: ${peerId}`)
-  }, [peerId])
+  // Announce peerId once when both peerId and socketId are available.
+  // Uses a ref to track what was last announced so we never re-announce the same peerId.
+  // announcePeer is intentionally excluded from deps — it's stable (useCallback([roomId]))
+  // and including it would cause this effect to re-run on every render cycle.
+  const announcePeerRef = useRef(announcePeer)
+  announcePeerRef.current = announcePeer
 
-  // Announce peerId when both peerId and socket are ready
   useEffect(() => {
-    if (!peerId || !socketId) {
-      return
-    }
-    if (lastAnnouncedPeerIdRef.current === peerId) {
-      return // already announced
-    }
-    console.log(`[announce] announcing peerId=${peerId} to socket=${socketId}`)
+    if (!peerId || !socketId) return
+    if (lastAnnouncedPeerIdRef.current === peerId) return
     lastAnnouncedPeerIdRef.current = peerId
-    announcePeer(peerId)
-  }, [peerId, socketId, announcePeer])
+    console.log(`[announce] peerId=${peerId} socketId=${socketId}`)
+    announcePeerRef.current(peerId)
+  }, [peerId, socketId])
 
   // Connect to remote peers via two sources:
   // 1. peerAnnouncements (from socket events / room:state injection)
