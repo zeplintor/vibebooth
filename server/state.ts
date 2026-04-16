@@ -31,6 +31,9 @@ export function addParticipant(roomId: string, participant: Participant): Room |
   return updated
 }
 
+const EMPTY_ROOM_TTL_MS = 30_000
+const pendingDeletions = new Map<string, NodeJS.Timeout>()
+
 export function removeParticipant(roomId: string, participantId: string): Room | undefined {
   const room = rooms.get(roomId)
   if (!room) return undefined
@@ -40,13 +43,33 @@ export function removeParticipant(roomId: string, participantId: string): Room |
     participants: room.participants.filter((p) => p.id !== participantId),
   }
 
+  rooms.set(roomId, updated)
+
+  // Don't delete empty rooms immediately — wait 30s to survive React remounts
+  // and client reconnections. If someone rejoins within that window, cancel the deletion.
   if (updated.participants.length === 0) {
-    rooms.delete(roomId)
+    const existing = pendingDeletions.get(roomId)
+    if (existing) clearTimeout(existing)
+    const timeout = setTimeout(() => {
+      const current = rooms.get(roomId)
+      if (current && current.participants.length === 0) {
+        rooms.delete(roomId)
+      }
+      pendingDeletions.delete(roomId)
+    }, EMPTY_ROOM_TTL_MS)
+    pendingDeletions.set(roomId, timeout)
     return undefined
   }
 
-  rooms.set(roomId, updated)
   return updated
+}
+
+export function cancelPendingDeletion(roomId: string): void {
+  const existing = pendingDeletions.get(roomId)
+  if (existing) {
+    clearTimeout(existing)
+    pendingDeletions.delete(roomId)
+  }
 }
 
 export function setParticipantPeerId(roomId: string, participantId: string, peerId: string): Room | undefined {

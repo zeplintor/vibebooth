@@ -13,6 +13,7 @@ import {
   setParticipantReady,
   setParticipantPeerId,
   setRoomPhase,
+  cancelPendingDeletion,
 } from '../state'
 
 type IO = Server<ClientToServerEvents, ServerToClientEvents>
@@ -37,6 +38,9 @@ export function registerRoomHandlers(io: IO, socket: IOSocket): void {
   socket.on('room:join', ({ roomId, name, peerId }) => {
     console.log(`[room:join] socket=${socket.id} name=${name} room=${roomId}`)
     let room = getRoom(roomId)
+
+    // Cancel any pending deletion of this room (e.g. if it went empty briefly)
+    cancelPendingDeletion(roomId)
 
     // Create room if it doesn't exist — first joiner becomes host
     if (!room) {
@@ -149,6 +153,7 @@ export function registerRoomHandlers(io: IO, socket: IOSocket): void {
 }
 
 function handleLeave(io: IO, socket: IOSocket, roomId: string): void {
+  console.log(`[room:leave] socket=${socket.id} room=${roomId}`)
   const updated = removeParticipant(roomId, socket.id)
   socket.leave(roomId)
 
