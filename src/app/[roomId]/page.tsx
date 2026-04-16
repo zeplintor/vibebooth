@@ -59,7 +59,9 @@ export default function RoomPage({ params }: RoomPageProps) {
   // server has the CURRENT peerId, otherwise peers try to call a dead ID)
   const lastAnnouncedPeerIdRef = useRef<string | null>(null)
   useEffect(() => {
+    console.log(`[announceEffect] peerId=${peerId} connected=${connected} socketId=${socketId} lastAnnounced=${lastAnnouncedPeerIdRef.current}`)
     if (peerId && connected && socketId && lastAnnouncedPeerIdRef.current !== peerId) {
+      console.log(`[announceEffect] ANNOUNCING peerId=${peerId}`)
       lastAnnouncedPeerIdRef.current = peerId
       announcePeer(peerId)
     }
