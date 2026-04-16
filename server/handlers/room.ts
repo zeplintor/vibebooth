@@ -163,6 +163,9 @@ export function registerRoomHandlers(io: IO, socket: IOSocket): void {
       // Broadcast the FULL room state to everyone (including the announcer)
       // so they all see the updated peerId in their participants list
       io.to(roomId).emit('room:state', updated)
+      // ALSO broadcast the peer:announce event so clients get the announcement immediately
+      // (even if room:state hasn't fully synced yet)
+      io.to(roomId).emit('peer:announce', { participantId: socket.id, peerId })
     }
   })
 
