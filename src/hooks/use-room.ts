@@ -186,7 +186,11 @@ export function useRoom(roomId: string): UseRoomResult {
 
   const announcePeer = useCallback((peerId: string) => {
     const socket = socketRef.current
-    if (!socket) return
+    if (!socket) {
+      console.warn('[announcePeer] socket not ready')
+      return
+    }
+    console.log(`[announcePeer] emitting peerId=${peerId} roomId=${roomId} socketId=${socket.id}`)
     socket.emit('peer:announce', { roomId, peerId })
   }, [roomId])
 
