@@ -169,6 +169,13 @@ export function registerRoomHandlers(io: IO, socket: IOSocket): void {
     }
   })
 
+  // Share final photo strip result with other participants
+  socket.on('result:share', ({ roomId, dataUrl }) => {
+    console.log(`[result:share] socket=${socket.id} room=${roomId}`)
+    // Relay the result image to everyone else in the room (not the sender)
+    socket.to(roomId).emit('result:image', dataUrl)
+  })
+
   socket.on('room:leave', (roomId) => {
     handleLeave(io, socket, roomId)
     currentRoomId = null

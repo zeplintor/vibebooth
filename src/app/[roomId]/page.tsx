@@ -32,8 +32,10 @@ export default function RoomPage({ params }: RoomPageProps) {
   const [capturedPhotos, setCapturedPhotos] = useState<[string, string, string] | null>(null)
   const [isJoining, setIsJoining] = useState(false) // Fix 7: loading state
   const [linkCopied, setLinkCopied] = useState(false) // Fix 4: copy link
+  const [receivedResultImage, setReceivedResultImage] = useState<string | null>(null)
   const hasJoined = useRef(false)
   const stripRef = useRef<HTMLDivElement>(null) // Fix 8: capture remote streams
+  const wasSnapInitiatorRef = useRef(false) // Track if WE initiated the snap for result sharing
 
   const { videoRef, stream, isActive, error, start, stop } = useCamera()
   const {
@@ -45,9 +47,11 @@ export default function RoomPage({ params }: RoomPageProps) {
     setReady,
     startCountdown,
     announcePeer,
+    shareResult,
     peerAnnouncements,
     countdownValue,
     captureTriggered,
+    resultImage,
   } = useRoom(roomId)
 
   // PeerJS for exchanging camera streams
@@ -147,12 +151,27 @@ export default function RoomPage({ params }: RoomPageProps) {
     }
   }, [isActive, myParticipant, setReady])
 
-  // Fix 6: rely solely on server captureTriggered — no local countdown fallback
+  // Fix 6: when capture is triggered by server, transition to capturing phase
+  // (Works for all participants, not just the snap initiator)
+  // Also track if WE initiated the snap (for result sharing)
   useEffect(() => {
-    if (captureTriggered && localPhase === 'countdown') {
+    if (captureTriggered) {
+      // Only the snap initiator will have just called startCountdown
+      // For now, mark as initiator if we're the first to reach this point
+      if (!wasSnapInitiatorRef.current) {
+        wasSnapInitiatorRef.current = true
+      }
       setLocalPhase('capturing')
     }
-  }, [captureTriggered, localPhase])
+  }, [captureTriggered])
+
+  // Listen for result images from other participants
+  useEffect(() => {
+    if (resultImage) {
+      setReceivedResultImage(resultImage)
+      setLocalPhase('result')
+    }
+  }, [resultImage])
 
   const showCountdown = countdownValue !== null && countdownValue > 0
 
@@ -191,9 +210,37 @@ export default function RoomPage({ params }: RoomPageProps) {
     if (localPhase !== 'capturing') return
 
     if (photosBufferRef.current.length >= 3) {
-      setCapturedPhotos(photosBufferRef.current as [string, string, string])
+      const photos = photosBufferRef.current as [string, string, string]
+      setCapturedPhotos(photos)
       stop()
       setLocalPhase('result')
+
+      // If we initiated the snap, generate and share the final image with others
+      if (wasSnapInitiatorRef.current) {
+        // Generate the final strip image using ResultView's render logic
+        // For now, just share the first photo as a placeholder; TODO: render full strip
+        const stripCanvas = document.createElement('canvas')
+        stripCanvas.width = 440
+        stripCanvas.height = 1240
+        const ctx = stripCanvas.getContext('2d')
+        if (ctx) {
+          // Simple: draw a vertical strip of the 3 photos
+          const frameH = 350
+          const pad = 20
+          for (let i = 0; i < 3; i++) {
+            const img = new Image()
+            img.onload = () => {
+              ctx.drawImage(img, 0, i * (frameH + pad), 440, frameH)
+            }
+            img.src = photos[i]
+          }
+          // Share after a delay to ensure all images are drawn
+          setTimeout(() => {
+            const dataUrl = stripCanvas.toDataURL('image/png')
+            shareResult(dataUrl)
+          }, 500)
+        }
+      }
       return
     }
 

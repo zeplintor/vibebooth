@@ -26,11 +26,24 @@ export function usePeerStreams(localStream: MediaStream | null, myParticipantId:
   const [peerError, setPeerError] = useState<string | null>(null)
   const [remoteStreams, setRemoteStreams] = useState<readonly PeerStream[]>([])
   const peerRef = useRef<Peer | null>(null)
+  const myPeerIdRef = useRef<string | null>(null)
   const connectionsRef = useRef<Map<string, MediaConnection>>(new Map())
+
+  // Keep myPeerIdRef in sync whenever peerId changes
+  useEffect(() => {
+    myPeerIdRef.current = peerId
+  }, [peerId])
 
   // Handle incoming stream from a call
   // Use call.peer (PeerJS ID) as the key — participantId matching happens in the component
+  // Reject incoming streams from ourselves (our own peerId) to avoid echo/duplicate
   const handleIncomingStream = useCallback((call: MediaConnection, stream: MediaStream) => {
+    // Guard: if this is our own peerId coming back to us, ignore it (loopback)
+    if (call.peer === myPeerIdRef.current) {
+      console.log('[PeerJS] ignoring own stream echo from peerId=', call.peer)
+      return
+    }
+
     console.log('[PeerJS] incoming stream from peerId=', call.peer)
     setRemoteStreams((prev) => {
       const filtered = prev.filter((s) => s.peerId !== call.peer)
@@ -84,6 +97,7 @@ export function usePeerStreams(localStream: MediaStream | null, myParticipantId:
 
     peer.on('open', (id) => {
       console.log('[PeerJS] open, id=', id)
+      myPeerIdRef.current = id // sync immediately so handleIncomingStream can use it
       setPeerId(id)
     })
 

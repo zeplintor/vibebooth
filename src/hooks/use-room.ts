@@ -28,9 +28,11 @@ interface UseRoomResult {
   readonly setReady: () => void
   readonly startCountdown: () => void
   readonly announcePeer: (peerId: string) => void
+  readonly shareResult: (dataUrl: string) => void
   readonly peerAnnouncements: readonly PeerAnnounce[]
   readonly countdownValue: number | null
   readonly captureTriggered: boolean
+  readonly resultImage: string | null
 }
 
 // Module-level singleton: one socket per page load, shared across remounts.
@@ -63,6 +65,7 @@ export function useRoom(roomId: string): UseRoomResult {
   const [countdownValue, setCountdownValue] = useState<number | null>(null)
   const [captureTriggered, setCaptureTriggered] = useState(false)
   const [peerAnnouncements, setPeerAnnouncements] = useState<readonly PeerAnnounce[]>([])
+  const [resultImage, setResultImage] = useState<string | null>(null)
   // Pending/active join name — used to retry on connect/reconnect
   const pendingJoinRef = useRef<string | null>(null)
   const joinedNameRef = useRef<string | null>(null)
@@ -141,6 +144,11 @@ export function useRoom(roomId: string): UseRoomResult {
       })
     })
 
+    socket.on('result:image', (dataUrl) => {
+      console.log('[result:image] received final photo strip from another participant')
+      setResultImage(dataUrl)
+    })
+
     socket.on('error', (msg) => {
       console.warn('[VibeBooth socket error]', msg)
     })
@@ -156,6 +164,7 @@ export function useRoom(roomId: string): UseRoomResult {
       socket.off('countdown:capture')
       socket.off('phase:change')
       socket.off('peer:announce')
+      socket.off('result:image')
       socket.off('error')
       socketRef.current = null
     }
@@ -190,6 +199,13 @@ export function useRoom(roomId: string): UseRoomResult {
     socket.emit('peer:announce', { roomId, peerId })
   }, [roomId])
 
+  const shareResult = useCallback((dataUrl: string) => {
+    const socket = socketRef.current
+    if (!socket) return
+    console.log(`[shareResult] sharing final photo strip to room=${roomId}`)
+    socket.emit('result:share', { roomId, dataUrl })
+  }, [roomId])
+
   const participants = room?.participants ?? []
   const myParticipant = participants.find((p) => p.id === socketId) ?? null
   const phase = room?.phase ?? 'lobby'
@@ -205,8 +221,10 @@ export function useRoom(roomId: string): UseRoomResult {
     setReady,
     startCountdown,
     announcePeer,
+    shareResult,
     peerAnnouncements,
     countdownValue,
     captureTriggered,
+    resultImage,
   }
 }
