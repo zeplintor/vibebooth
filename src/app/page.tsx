@@ -28,7 +28,7 @@ export default function HomePage() {
   }
 
   return (
-    <main className="min-h-screen flex flex-col items-center px-4 pb-16 pt-10 overflow-hidden">
+    <div className="flex flex-col items-center w-full max-w-sm mx-auto px-4 pb-16 pt-6">
 
       {/* Floating deco blobs */}
       <div aria-hidden className="pointer-events-none fixed inset-0 overflow-hidden -z-10">
@@ -138,6 +138,6 @@ export default function HomePage() {
           </button>
         </div>
       </section>
-    </main>
+    </div>
   )
 }
