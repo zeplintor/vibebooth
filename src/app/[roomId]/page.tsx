@@ -131,19 +131,15 @@ export default function RoomPage({ params }: RoomPageProps) {
     }
   }, [isActive, myParticipant, setReady])
 
-  // Fix 6: when capture is triggered by server, transition to capturing phase
-  // (Works for all participants, not just the snap initiator)
-  // Also track if WE initiated the snap (for result sharing)
+  // Transition to capturing only when we're actually in countdown phase
+  // Guarding on localPhase prevents re-triggering after retake (captureTriggered
+  // stays true on the server until next snap)
   useEffect(() => {
-    if (captureTriggered) {
-      // Only the snap initiator will have just called startCountdown
-      // For now, mark as initiator if we're the first to reach this point
-      if (!wasSnapInitiatorRef.current) {
-        wasSnapInitiatorRef.current = true
-      }
+    if (captureTriggered && localPhase === 'countdown') {
+      wasSnapInitiatorRef.current = true
       setLocalPhase('capturing')
     }
-  }, [captureTriggered])
+  }, [captureTriggered, localPhase])
 
   // Listen for result images from other participants
   useEffect(() => {
@@ -254,9 +250,10 @@ export default function RoomPage({ params }: RoomPageProps) {
 
   function handleRetake() {
     setCapturedPhotos(null)
+    setReceivedResultImage(null)
     photosBufferRef.current = []
     setCaptureIndex(0)
-    hasJoined.current = false
+    wasSnapInitiatorRef.current = false
     setLocalPhase('lobby')
   }
 
