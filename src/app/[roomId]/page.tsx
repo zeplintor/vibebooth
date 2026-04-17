@@ -493,6 +493,23 @@ export default function RoomPage({ params }: RoomPageProps) {
         </div>
       )}
 
+      {/* Capture loading overlay — shown when countdown ends and we're processing */}
+      {!showCountdown && (localPhase === 'capturing' || captureTriggered) && localPhase !== 'result' && (
+        <div className="fixed inset-0 z-40 flex flex-col items-center justify-center bg-black/60 backdrop-blur-sm gap-4">
+          {/* Flash effect */}
+          <div className="absolute inset-0 bg-white animate-[flash_0.15s_ease-out]" style={{ animationFillMode: 'forwards', animationIterationCount: 1 }} />
+          {/* Camera shutter ring */}
+          <div className="relative z-10 w-20 h-20 rounded-full border-4 border-white/40 flex items-center justify-center">
+            <div className="w-14 h-14 rounded-full border-4 border-t-vb-pink border-r-vb-pink border-b-transparent border-l-transparent animate-spin" />
+          </div>
+          <p className="relative z-10 font-[family-name:var(--font-hand)] text-2xl text-white drop-shadow-lg">
+            {localPhase === 'capturing'
+              ? `📸 ${Math.min(Math.floor(captureIndex) + 1, 3)} / 3`
+              : '📸 Smile!'}
+          </p>
+        </div>
+      )}
+
       <DrawingModal open={drawingOpen} onClose={() => setDrawingOpen(false)} onSave={(url) => setBackgroundUrl(url)} roomId={roomId} userName={userName} photos={capturedPhotos || undefined} />
     </div>
   )
