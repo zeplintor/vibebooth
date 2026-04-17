@@ -13,13 +13,13 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" className="h-full">
-      <body className="h-full overflow-hidden flex flex-col">
+      <body className="h-full flex flex-col">
         <header className="text-center py-2 shrink-0">
           <h1 className="font-[family-name:var(--font-hand)] text-3xl font-bold text-vb-pink tracking-wide">
             VibeBooth
           </h1>
         </header>
-        <main className="flex-1 flex flex-col items-center px-4 pb-2 min-h-0">
+        <main className="flex-1 flex flex-col items-center px-4 pb-2 overflow-y-auto min-h-0">
           {children}
         </main>
       </body>
